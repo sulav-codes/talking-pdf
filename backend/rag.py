@@ -151,8 +151,17 @@ def query_rag(question: str, top_k: int = None) -> Tuple[str, List[str]]:
         for i, (doc, meta) in enumerate(zip(documents, metadatas)):
             context_parts.append(f"[Context {i+1}]\n{doc}")
             source = meta.get("source", "Unknown")
-            if source not in sources:
-                sources.append(source)
+            pages = meta.get("pages", [])
+            
+            # Format source with page numbers
+            if pages:
+                page_str = ", ".join([f"p.{p}" for p in pages])
+                source_entry = f"{source} ({page_str})"
+            else:
+                source_entry = source
+            
+            if source_entry not in sources:
+                sources.append(source_entry)
         
         context = "\n\n".join(context_parts)
         
