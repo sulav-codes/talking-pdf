@@ -39,47 +39,52 @@ def index_pdf(file_path: str) -> int:
     try:
         logger.info(f"Starting indexing for: {file_path}")
         
-        # Extract text from PDF
-        text = extract_text(file_path)
+        # Extract text from PDF with page numbers
+        text, page_map = extract_text(file_path)
         
         if not text or len(text.strip()) < 10:
             raise ValueError("Extracted text is too short or empty")
         
         logger.info(f"Extracted {len(text)} characters from PDF")
         
-        # Chunk the text
-        chunks = chunk_text(
+        # Chunk the text with page tracking
+        from utils import chunk_text_with_pages
+        chunks_with_pages = chunk_text_with_pages(
             text,
+            page_map,
             chunk_size=settings.CHUNK_SIZE,
             chunk_overlap=settings.CHUNK_OVERLAP
         )
         
-        logger.info(f"Created {len(chunks)} chunks")
+        logger.info(f"Created {len(chunks_with_pages)} chunks")
         
         # Batch process embeddings for efficiency
         batch_size = 32  # Optimized for sentence-transformers
         total_indexed = 0
         
-        for i in range(0, len(chunks), batch_size):
-            batch = chunks[i:i + batch_size]
+        for i in range(0, len(chunks_with_pages), batch_size):
+            batch_items = chunks_with_pages[i:i + batch_size]
+            batch_texts = [item[0] for item in batch_items]
+            batch_pages = [item[1] for item in batch_items]
             
             # Generate embeddings using HuggingFace model (LOCAL - FAST!)
             embeddings = embedding_model.encode(
-                batch,
+                batch_texts,
                 show_progress_bar=False,
                 convert_to_numpy=True
             )
             
             # Prepare data for batch insertion
-            ids = [str(uuid.uuid4()) for _ in batch]
+            ids = [str(uuid.uuid4()) for _ in batch_texts]
             embeddings_list = embeddings.tolist()  # Convert numpy to list for ChromaDB
             metadatas = [
                 {
                     "source": Path(file_path).name,
                     "chunk_index": i + j,
-                    "total_chunks": len(chunks)
+                    "total_chunks": len(chunks_with_pages),
+                    "pages": batch_pages[j]  # Store page numbers
                 }
-                for j in range(len(batch))
+                for j in range(len(batch_texts))
             ]
             
             # Add to collection
@@ -87,11 +92,11 @@ def index_pdf(file_path: str) -> int:
                 ids=ids,
                 embeddings=embeddings_list,
                 metadatas=metadatas,
-                documents=batch
+                documents=batch_texts
             )
             
-            total_indexed += len(batch)
-            logger.info(f"Indexed {total_indexed}/{len(chunks)} chunks")
+            total_indexed += len(batch_texts)
+            logger.info(f"Indexed {total_indexed}/{len(chunks_with_pages)} chunks")
         
         logger.info(f"Successfully indexed {total_indexed} chunks from {file_path}")
         return total_indexed

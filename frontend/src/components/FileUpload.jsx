@@ -9,6 +9,7 @@ import {
   CheckCircle,
   AlertCircle,
 } from "lucide-react";
+import APIService from "@/lib/api";
 
 export default function FileUpload({ onUploadSuccess }) {
   const [file, setFile] = useState(null);
@@ -54,19 +55,7 @@ export default function FileUpload({ onUploadSuccess }) {
     setUploadStatus(null);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch("http://localhost:8000/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error("Upload failed");
-      }
-
-      const data = await response.json();
+      const data = await APIService.uploadPDF(file);
       setUploadStatus({
         type: "success",
         message: `Indexed ${data.chunks_indexed} chunks successfully!`,

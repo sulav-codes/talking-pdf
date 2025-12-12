@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# Get the backend directory (where this config file is located)
+BACKEND_DIR = Path(__file__).parent.resolve()
+
 class Settings:
     """Application settings and configuration"""
     
@@ -20,11 +23,11 @@ class Settings:
     CHAT_MODEL: str = "llama-3.1-8b-instant"  # Groq Llama 3.1 8B (current model)
     
     # Database Configuration
-    CHROMA_PERSIST_DIR: str = os.getenv("CHROMA_PERSIST_DIR", "./chroma_db")
+    CHROMA_PERSIST_DIR: Path = BACKEND_DIR / "chroma_db"
     COLLECTION_NAME: str = "pdf_documents"
     
     # Upload Configuration
-    UPLOAD_DIR: Path = Path(os.getenv("UPLOAD_DIR", "./uploads"))
+    UPLOAD_DIR: Path = BACKEND_DIR / "uploads"
     MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
     ALLOWED_EXTENSIONS: set = {".pdf"}
     
@@ -59,7 +62,7 @@ class Settings:
         self.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         
         # Create chroma persist directory if it doesn't exist
-        Path(self.CHROMA_PERSIST_DIR).mkdir(parents=True, exist_ok=True)
+        self.CHROMA_PERSIST_DIR.mkdir(parents=True, exist_ok=True)
 
 # Global settings instance
 settings = Settings()

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 try:
     chroma_client = chromadb.Client(
         ChromaSettings(
-            persist_directory=settings.CHROMA_PERSIST_DIR,
+            persist_directory=str(settings.CHROMA_PERSIST_DIR),
             anonymized_telemetry=False
         )
     )

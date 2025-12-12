@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Send, Loader2, FileText } from "lucide-react";
+import APIService from "@/lib/api";
 
 export default function ChatInterface({ disabled }) {
   const [question, setQuestion] = useState("");
@@ -18,19 +19,7 @@ export default function ChatInterface({ disabled }) {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/query", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ question }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Query failed");
-      }
-
-      const data = await response.json();
+      const data = await APIService.query(question);
       const assistantMessage = {
         role: "assistant",
         content: data.answer,
@@ -40,7 +29,7 @@ export default function ChatInterface({ disabled }) {
     } catch (error) {
       const errorMessage = {
         role: "error",
-        content: "Failed to get response. Please try again.",
+        content: error.message || "Failed to get response. Please try again.",
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {

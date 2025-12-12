@@ -1,22 +1,23 @@
 "use client";
 
-import { Database, FileText, Trash2, Loader2 } from "lucide-react";
+import { Database, FileText, Trash2, Loader2, AlertCircle } from "lucide-react";
 import { useState, useEffect } from "react";
+import APIService from "@/lib/api";
 
 export default function StatsPanel() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
+  const [error, setError] = useState(null);
 
   const fetchStats = async () => {
     try {
-      const response = await fetch("http://localhost:8000/stats");
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
+      setError(null);
+      const data = await APIService.getStats();
+      setStats(data);
     } catch (error) {
       console.error("Failed to fetch stats:", error);
+      setError(error.message || "Failed to fetch stats");
     } finally {
       setLoading(false);
     }
@@ -33,15 +34,12 @@ export default function StatsPanel() {
 
     setClearing(true);
     try {
-      const response = await fetch("http://localhost:8000/collection", {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        await fetchStats();
-      }
+      setError(null);
+      await APIService.clearCollection();
+      await fetchStats();
     } catch (error) {
       console.error("Failed to clear collection:", error);
+      setError(error.message || "Failed to clear collection");
     } finally {
       setClearing(false);
     }
@@ -55,8 +53,34 @@ export default function StatsPanel() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-6">
-        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <div className="flex items-center justify-center p-6">
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+        <div className="flex items-start space-x-3 p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg">
+          <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-900 dark:text-red-200">
+              Connection Error
+            </p>
+            <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+              {error}
+            </p>
+            <button
+              onClick={fetchStats}
+              className="mt-2 px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded-md"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
