@@ -82,7 +82,7 @@ def index_pdf(file_path: str) -> int:
                     "source": Path(file_path).name,
                     "chunk_index": i + j,
                     "total_chunks": len(chunks_with_pages),
-                    "pages": batch_pages[j]  # Store page numbers
+                    "pages": ",".join(map(str, batch_pages[j])) if batch_pages[j] else ""  # Store as comma-separated string
                 }
                 for j in range(len(batch_texts))
             ]
@@ -151,7 +151,10 @@ def query_rag(question: str, top_k: int = None) -> Tuple[str, List[str]]:
         for i, (doc, meta) in enumerate(zip(documents, metadatas)):
             context_parts.append(f"[Context {i+1}]\n{doc}")
             source = meta.get("source", "Unknown")
-            pages = meta.get("pages", [])
+            pages_str = meta.get("pages", "")
+            
+            # Parse pages from comma-separated string
+            pages = [int(p) for p in pages_str.split(",") if p.strip()] if pages_str else []
             
             # Format source with page numbers
             if pages:

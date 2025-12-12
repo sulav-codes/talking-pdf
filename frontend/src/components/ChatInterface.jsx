@@ -73,18 +73,32 @@ export default function ChatInterface({ disabled }) {
                 <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                 {message.sources && message.sources.length > 0 && (
                   <div className="mt-3 pt-3 border-t border-gray-300 dark:border-gray-600">
-                    <p className="text-xs font-semibold mb-2 text-gray-700 dark:text-gray-300">
-                      Sources:
+                    <p className="text-xs font-semibold mb-2 text-gray-700 dark:text-gray-300 flex items-center space-x-1">
+                      <FileText className="w-3 h-3" />
+                      <span>Sources:</span>
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      {message.sources.map((source, idx) => (
-                        <span
-                          key={idx}
-                          className="text-xs bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-2 py-1 rounded border border-gray-300 dark:border-gray-600"
-                        >
-                          {source}
-                        </span>
-                      ))}
+                      {message.sources.map((source, idx) => {
+                        // Parse source to separate filename and pages
+                        const match = source.match(/^(.+?)\s*\((.+?)\)$/);
+                        const filename = match ? match[1] : source;
+                        const pages = match ? match[2] : null;
+                        
+                        return (
+                          <div
+                            key={idx}
+                            className="text-xs bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-600 flex items-center space-x-1.5"
+                          >
+                            <FileText className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                            <span className="font-medium">{filename}</span>
+                            {pages && (
+                              <span className="text-blue-600 dark:text-blue-400 font-semibold">
+                                {pages}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

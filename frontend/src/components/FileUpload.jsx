@@ -16,6 +16,8 @@ export default function FileUpload({ onUploadSuccess }) {
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStage, setUploadStage] = useState(""); // "uploading", "processing", "indexing"
   const fileInputRef = useRef(null);
 
   const handleDrag = (e) => {
@@ -53,9 +55,61 @@ export default function FileUpload({ onUploadSuccess }) {
 
     setUploading(true);
     setUploadStatus(null);
+    setUploadProgress(0);
+    setUploadStage("uploading");
 
     try {
-      const data = await APIService.uploadPDF(file);
+      // Create XMLHttpRequest for upload progress tracking
+      const xhr = new XMLHttpRequest();
+      const formData = new FormData();
+      formData.append("file", file);
+
+      // Track upload progress
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          const percentComplete = (e.loaded / e.total) * 100;
+          setUploadProgress(Math.round(percentComplete));
+        }
+      });
+
+      // Handle state changes
+      xhr.addEventListener("readystatechange", () => {
+        if (xhr.readyState === XMLHttpRequest.HEADERS_RECEIVED) {
+          setUploadStage("processing");
+          setUploadProgress(100);
+        }
+      });
+
+      const uploadPromise = new Promise((resolve, reject) => {
+        xhr.addEventListener("load", () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const data = JSON.parse(xhr.responseText);
+              resolve(data);
+            } catch (e) {
+              reject(new Error("Invalid response format"));
+            }
+          } else {
+            try {
+              const error = JSON.parse(xhr.responseText);
+              reject(new Error(error.detail || "Upload failed"));
+            } catch (e) {
+              reject(new Error(`Upload failed: ${xhr.statusText}`));
+            }
+          }
+        });
+
+        xhr.addEventListener("error", () => {
+          reject(new Error("Network error occurred"));
+        });
+
+        xhr.open("POST", (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000") + "/upload");
+        xhr.send(formData);
+      });
+
+      setUploadStage("indexing");
+      const data = await uploadPromise;
+
       setUploadStatus({
         type: "success",
         message: `Indexed ${data.chunks_indexed} chunks successfully!`,
@@ -69,6 +123,8 @@ export default function FileUpload({ onUploadSuccess }) {
       setTimeout(() => {
         setFile(null);
         setUploadStatus(null);
+        setUploadProgress(0);
+        setUploadStage("");
       }, 3000);
     } catch (error) {
       setUploadStatus({
@@ -157,7 +213,11 @@ export default function FileUpload({ onUploadSuccess }) {
               {uploading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Uploading & Indexing...</span>
+                  <span>
+                    {uploadStage === "uploading" && `Uploading... ${uploadProgress}%`}
+                    {uploadStage === "processing" && "Processing PDF..."}
+                    {uploadStage === "indexing" && "Indexing chunks..."}
+                  </span>
                 </>
               ) : (
                 <>
@@ -166,6 +226,35 @@ export default function FileUpload({ onUploadSuccess }) {
                 </>
               )}
             </button>
+
+            {/* Progress Bar */}
+            {uploading && (
+              <div className="space-y-2">
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-300 ${
+                      uploadStage === "uploading"
+                        ? "bg-blue-600"
+                        : uploadStage === "processing"
+                        ? "bg-yellow-500"
+                        : "bg-green-500"
+                    }`}
+                    style={{
+                      width: uploadStage === "uploading" ? `${uploadProgress}%` : "100%",
+                    }}
+                  >
+                    {(uploadStage === "processing" || uploadStage === "indexing") && (
+                      <div className="h-full w-full bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-gray-600 dark:text-gray-400 text-center">
+                  {uploadStage === "uploading" && `Uploading file: ${uploadProgress}%`}
+                  {uploadStage === "processing" && "Extracting text from PDF..."}
+                  {uploadStage === "indexing" && "Creating embeddings and indexing..."}
+                </p>
+              </div>
+            )}
           </div>
         )}
 
