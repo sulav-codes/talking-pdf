@@ -83,7 +83,7 @@ export default function ChatInterface({ disabled }) {
                         const match = source.match(/^(.+?)\s*\((.+?)\)$/);
                         const filename = match ? match[1] : source;
                         const pages = match ? match[2] : null;
-                        
+
                         return (
                           <div
                             key={idx}

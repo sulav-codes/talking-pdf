@@ -103,7 +103,11 @@ export default function FileUpload({ onUploadSuccess }) {
           reject(new Error("Network error occurred"));
         });
 
-        xhr.open("POST", (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000") + "/upload");
+        xhr.open(
+          "POST",
+          (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000") +
+            "/upload"
+        );
         xhr.send(formData);
       });
 
@@ -214,7 +218,8 @@ export default function FileUpload({ onUploadSuccess }) {
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
                   <span>
-                    {uploadStage === "uploading" && `Uploading... ${uploadProgress}%`}
+                    {uploadStage === "uploading" &&
+                      `Uploading... ${uploadProgress}%`}
                     {uploadStage === "processing" && "Processing PDF..."}
                     {uploadStage === "indexing" && "Indexing chunks..."}
                   </span>
@@ -240,18 +245,25 @@ export default function FileUpload({ onUploadSuccess }) {
                         : "bg-green-500"
                     }`}
                     style={{
-                      width: uploadStage === "uploading" ? `${uploadProgress}%` : "100%",
+                      width:
+                        uploadStage === "uploading"
+                          ? `${uploadProgress}%`
+                          : "100%",
                     }}
                   >
-                    {(uploadStage === "processing" || uploadStage === "indexing") && (
+                    {(uploadStage === "processing" ||
+                      uploadStage === "indexing") && (
                       <div className="h-full w-full bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
                     )}
                   </div>
                 </div>
                 <p className="text-xs text-gray-600 dark:text-gray-400 text-center">
-                  {uploadStage === "uploading" && `Uploading file: ${uploadProgress}%`}
-                  {uploadStage === "processing" && "Extracting text from PDF..."}
-                  {uploadStage === "indexing" && "Creating embeddings and indexing..."}
+                  {uploadStage === "uploading" &&
+                    `Uploading file: ${uploadProgress}%`}
+                  {uploadStage === "processing" &&
+                    "Extracting text from PDF..."}
+                  {uploadStage === "indexing" &&
+                    "Creating embeddings and indexing..."}
                 </p>
               </div>
             )}
