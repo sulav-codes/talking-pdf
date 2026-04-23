@@ -8,28 +8,77 @@ export default function ChatInterface({ disabled }) {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [engine, setEngine] = useState("direct");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!question.trim() || loading) return;
 
-    const userMessage = { role: "user", content: question };
+    const userMessage = {
+      role: "user",
+      content: question,
+      mode: "single",
+      selectedEngine: engine,
+    };
     setMessages((prev) => [...prev, userMessage]);
     setQuestion("");
     setLoading(true);
 
     try {
-      const data = await APIService.query(question);
+      const data = await APIService.query(question, 4, engine);
       const assistantMessage = {
         role: "assistant",
         content: data.answer,
         sources: data.sources,
+        engine: data.engine,
       };
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       const errorMessage = {
         role: "error",
         content: error.message || "Failed to get response. Please try again.",
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCompare = async () => {
+    if (!question.trim() || loading) return;
+
+    const userMessage = {
+      role: "user",
+      content: question,
+      mode: "compare",
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setQuestion("");
+    setLoading(true);
+
+    try {
+      const data = await APIService.compareQuery(question, 4);
+
+      const directMessage = {
+        role: "assistant",
+        content: data.direct.answer,
+        sources: data.direct.sources,
+        engine: "direct",
+      };
+
+      const langchainMessage = {
+        role: "assistant",
+        content: data.langchain.answer,
+        sources: data.langchain.sources,
+        engine: "langchain",
+      };
+
+      setMessages((prev) => [...prev, directMessage, langchainMessage]);
+    } catch (error) {
+      const errorMessage = {
+        role: "error",
+        content:
+          error.message || "Failed to compare responses. Please try again.",
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
@@ -66,10 +115,17 @@ export default function ChatInterface({ disabled }) {
                   message.role === "user"
                     ? "bg-blue-600 text-white"
                     : message.role === "error"
-                    ? "bg-red-50 dark:bg-red-950/20 text-red-900 dark:text-red-200 border border-red-200 dark:border-red-900"
-                    : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                      ? "bg-red-50 dark:bg-red-950/20 text-red-900 dark:text-red-200 border border-red-200 dark:border-red-900"
+                      : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                 }`}
               >
+                {message.role === "assistant" && message.engine && (
+                  <div className="mb-2">
+                    <span className="text-[10px] uppercase tracking-wide font-semibold bg-white/70 dark:bg-gray-700 text-gray-700 dark:text-gray-200 px-2 py-1 rounded">
+                      {message.engine}
+                    </span>
+                  </div>
+                )}
                 <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                 {message.sources && message.sources.length > 0 && (
                   <div className="mt-3 pt-3 border-t border-gray-300 dark:border-gray-600">
@@ -120,6 +176,28 @@ export default function ChatInterface({ disabled }) {
 
       {/* Input Area */}
       <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+            Engine
+          </label>
+          <select
+            value={engine}
+            onChange={(e) => setEngine(e.target.value)}
+            disabled={disabled || loading}
+            className="text-sm px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-900"
+          >
+            <option value="direct">Direct</option>
+            <option value="langchain">LangChain</option>
+          </select>
+          <button
+            type="button"
+            onClick={handleCompare}
+            disabled={disabled || loading || !question.trim()}
+            className="text-sm px-4 py-2 rounded-lg border border-blue-300 text-blue-700 dark:text-blue-300 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/20 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Compare Both
+          </button>
+        </div>
         <form onSubmit={handleSubmit} className="flex space-x-3">
           <input
             type="text"

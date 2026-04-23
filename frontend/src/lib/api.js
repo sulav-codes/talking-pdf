@@ -12,7 +12,6 @@ class APIError extends Error {
 }
 
 class APIService {
-
   //Handle fetch errors with proper error messages
   static async handleResponse(response) {
     if (!response.ok) {
@@ -46,7 +45,7 @@ class APIService {
         "Cannot connect to server. Please ensure the backend is running on " +
           API_BASE_URL,
         0,
-        { originalError: error.message }
+        { originalError: error.message },
       );
     }
 
@@ -77,9 +76,28 @@ class APIService {
   /**
    * Query the RAG system
    */
-  static async query(question, topK = 4) {
+  static async query(question, topK = 4, engine = "direct") {
     try {
       const response = await fetch(`${API_BASE_URL}/query`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ question, top_k: topK, engine }),
+      });
+
+      return await this.handleResponse(response);
+    } catch (error) {
+      this.handleNetworkError(error);
+    }
+  }
+
+  /**
+   * Compare direct and LangChain query paths
+   */
+  static async compareQuery(question, topK = 4) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/query/compare`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
