@@ -2,7 +2,7 @@
 import os
 import shutil
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Literal
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 import logging
 
 from config import settings
-from rag import index_pdf, query_rag
+from rag import index_pdf, query_rag, query_rag_langchain
 from db import get_collection_stats, clear_collection
 
 # Configure logging
@@ -41,12 +41,31 @@ class QueryRequest(BaseModel):
     """Request model for querying the RAG system"""
     question: str = Field(..., min_length=1, max_length=1000, description="Question to ask")
     top_k: Optional[int] = Field(default=None, ge=1, le=10, description="Number of context chunks to retrieve")
+    engine: Literal["direct", "langchain"] = Field(
+        default="direct",
+        description="Query pipeline to use"
+    )
+
+
+class CompareQueryRequest(BaseModel):
+    """Request model for comparing direct and LangChain query pipelines"""
+    question: str = Field(..., min_length=1, max_length=1000, description="Question to ask")
+    top_k: Optional[int] = Field(default=None, ge=1, le=10, description="Number of context chunks to retrieve")
 
 
 class QueryResponse(BaseModel):
     """Response model for RAG queries"""
     answer: str
     sources: list[str]
+    engine: Literal["direct", "langchain"]
+
+
+class CompareQueryResponse(BaseModel):
+    """Response model for comparing both query pipelines"""
+    question: str
+    top_k: int
+    direct: QueryResponse
+    langchain: QueryResponse
     
 
 class UploadResponse(BaseModel):
@@ -78,15 +97,6 @@ async def health_check():
 
 @app.post("/upload", response_model=UploadResponse)
 async def upload_pdf(file: UploadFile = File(...)):
-    """
-    Upload and index a PDF file
-    
-    Args:
-        file: PDF file to upload and index
-        
-    Returns:
-        Upload response with indexing details
-    """
     try:
         # Validate file extension
         file_ext = Path(file.filename).suffix.lower()
@@ -138,30 +148,58 @@ async def upload_pdf(file: UploadFile = File(...)):
 
 @app.post("/query", response_model=QueryResponse)
 async def ask_question(request: QueryRequest):
-    """
-    Query the RAG system with a question
-    
-    Args:
-        request: Query request with question and optional parameters
-        
-    Returns:
-        Answer and source documents
-    """
+
     try:
         top_k = request.top_k or settings.TOP_K_RESULTS
+        engine = request.engine
         
-        logger.info(f"Processing query: {request.question[:50]}...")
+        logger.info(f"Processing {engine} query: {request.question[:50]}...")
         
-        answer, sources = query_rag(request.question, top_k=top_k)
+        if engine == "langchain":
+            answer, sources = query_rag_langchain(request.question, top_k=top_k)
+        else:
+            answer, sources = query_rag(request.question, top_k=top_k)
         
         return {
             "answer": answer,
-            "sources": sources
+            "sources": sources,
+            "engine": engine
         }
         
     except Exception as e:
         logger.error(f"Query failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+
+
+@app.post("/query/compare", response_model=CompareQueryResponse)
+async def compare_query_paths(request: CompareQueryRequest):
+    """Run the same query through both direct and LangChain pipelines."""
+    try:
+        top_k = request.top_k or settings.TOP_K_RESULTS
+
+        logger.info(f"Comparing query pipelines for: {request.question[:50]}...")
+
+        direct_answer, direct_sources = query_rag(request.question, top_k=top_k)
+        lc_answer, lc_sources = query_rag_langchain(request.question, top_k=top_k)
+
+        return {
+            "question": request.question,
+            "top_k": top_k,
+            "direct": {
+                "answer": direct_answer,
+                "sources": direct_sources,
+                "engine": "direct"
+            },
+            "langchain": {
+                "answer": lc_answer,
+                "sources": lc_sources,
+                "engine": "langchain"
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Query comparison failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Query comparison failed: {str(e)}")
 
 
 @app.delete("/collection")

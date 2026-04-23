@@ -1,6 +1,4 @@
-/**
- * API service for communicating with the RAG backend
- */
+//API service for communicating with the RAG backend
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -14,9 +12,8 @@ class APIError extends Error {
 }
 
 class APIService {
-  /**
-   * Handle fetch errors with proper error messages
-   */
+
+  //Handle fetch errors with proper error messages
   static async handleResponse(response) {
     if (!response.ok) {
       let errorMessage = "Request failed";
