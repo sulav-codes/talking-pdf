@@ -9,21 +9,15 @@ from PyPDF2 import PdfReader
 logger = logging.getLogger(__name__)
 
 
-def extract_text(file_path: str) -> tuple:
-    """
-    Extract text from a PDF file with page numbers
-    
-    Args:
-        file_path: Path to the PDF file
-        
-    Returns:
-        Tuple of (full_text, page_map) where page_map is list of (page_num, text) tuples
-    """
+def extract_text(file_input) -> tuple:
+
     try:
-        if not Path(file_path).exists():
-            raise FileNotFoundError(f"File not found: {file_path}")
+        # Handle both file paths and file-like objects (BytesIO)
+        if isinstance(file_input, str):
+            if not Path(file_input).exists():
+                raise FileNotFoundError(f"File not found: {file_input}")
         
-        reader = PdfReader(file_path)
+        reader = PdfReader(file_input)
         
         if len(reader.pages) == 0:
             raise ValueError("PDF has no pages")
@@ -51,21 +45,12 @@ def extract_text(file_path: str) -> tuple:
         return full_text, page_map
         
     except Exception as e:
-        logger.error(f"Text extraction failed for {file_path}: {e}")
+        logger.error(f"Text extraction failed: {e}")
         raise
 
 
 def clean_text(text: str) -> str:
-    """
-    Clean and normalize extracted text
-    
-    Args:
-        text: Raw text to clean
-        
-    Returns:
-        Cleaned text
-    """
-    # Remove excessive whitespace
+
     text = re.sub(r'\s+', ' ', text)
     
     # Remove excessive newlines
@@ -78,18 +63,7 @@ def clean_text(text: str) -> str:
 
 
 def chunk_text_with_pages(text: str, page_map: List[tuple], chunk_size: int = 1000, chunk_overlap: int = 200) -> List[tuple]:
-    """
-    Chunk text while preserving page number information
-    
-    Args:
-        text: Full text to chunk
-        page_map: List of (page_num, page_text) tuples
-        chunk_size: Target size for each chunk
-        chunk_overlap: Overlap between chunks
-        
-    Returns:
-        List of (chunk_text, page_numbers) tuples
-    """
+
     chunks_with_pages = []
     
     # Build position map for page numbers
@@ -127,17 +101,7 @@ def chunk_text_with_pages(text: str, page_map: List[tuple], chunk_size: int = 10
 
 
 def chunk_text(text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[str]:
-    """
-    Split text into overlapping chunks for better context preservation
-    
-    Args:
-        text: Text to chunk
-        chunk_size: Maximum size of each chunk
-        chunk_overlap: Number of characters to overlap between chunks
-        
-    Returns:
-        List of text chunks
-    """
+
     if not text:
         return []
     

@@ -1,17 +1,20 @@
-"""Main FastAPI application for RAG Chatbot Backend"""
-import os
-import shutil
-from pathlib import Path
+"""Main FastAPI application for RAG Chatbot Backend - Cloud Ready"""
+import io
+import uuid
+import logging
 from typing import Optional, Literal
+from urllib.parse import quote
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query
+import requests
+
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-import logging
 
+# Import from our refactored, cloud-ready modules
 from config import settings
 from rag import index_pdf, query_rag, query_rag_langchain
-from db import get_collection_stats, clear_collection
+from db import get_index_stats, clear_index
 
 # Configure logging
 logging.basicConfig(
@@ -20,6 +23,31 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def upload_pdf_to_supabase(file_content: bytes, filename: str, content_type: str = "application/pdf") -> str:
+    """Upload PDF bytes to Supabase Storage and return the object path."""
+    if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY or not settings.SUPABASE_BUCKET:
+        raise RuntimeError(
+            "Supabase storage is not configured. Set SUPABASE_URL, SUPABASE_SERVICE_KEY, and SUPABASE_BUCKET."
+        )
+
+    object_path = f"{settings.SUPABASE_UPLOAD_PREFIX.strip('/')}/{uuid.uuid4()}-{filename}"
+    encoded_object_path = quote(object_path, safe="/-_.")
+    endpoint = f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/{settings.SUPABASE_BUCKET}/{encoded_object_path}"
+
+    headers = {
+        "Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}",
+        "apikey": settings.SUPABASE_SERVICE_KEY,
+        "Content-Type": content_type,
+        "x-upsert": "true",
+    }
+
+    response = requests.post(endpoint, headers=headers, data=file_content, timeout=30)
+    if response.status_code not in (200, 201):
+        raise RuntimeError(f"Supabase upload failed ({response.status_code}): {response.text}")
+
+    return object_path
+
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.API_TITLE,
@@ -27,7 +55,7 @@ app = FastAPI(
     description=settings.API_DESCRIPTION
 )
 
-# Add CORS middleware
+# Add CORS middleware (uses the flexible config from settings)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -37,99 +65,89 @@ app.add_middleware(
 )
 
 
+# Pydantic Models
 class QueryRequest(BaseModel):
-    """Request model for querying the RAG system"""
-    question: str = Field(..., min_length=1, max_length=1000, description="Question to ask")
-    top_k: Optional[int] = Field(default=None, ge=1, le=10, description="Number of context chunks to retrieve")
-    engine: Literal["direct", "langchain"] = Field(
-        default="direct",
-        description="Query pipeline to use"
-    )
-
-
-class CompareQueryRequest(BaseModel):
-    """Request model for comparing direct and LangChain query pipelines"""
-    question: str = Field(..., min_length=1, max_length=1000, description="Question to ask")
-    top_k: Optional[int] = Field(default=None, ge=1, le=10, description="Number of context chunks to retrieve")
-
+    question: str = Field(..., min_length=1, max_length=1000)
+    top_k: Optional[int] = Field(default=None, ge=1, le=10)
+    # The 'engine' parameter is kept for API compatibility, but logic now defaults to LangChain
+    engine: Literal["direct", "langchain"] = Field(default="langchain")
 
 class QueryResponse(BaseModel):
-    """Response model for RAG queries"""
     answer: str
     sources: list[str]
     engine: Literal["direct", "langchain"]
 
+class CompareQueryRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=1000)
+    top_k: Optional[int] = Field(default=None, ge=1, le=10)
 
 class CompareQueryResponse(BaseModel):
-    """Response model for comparing both query pipelines"""
     question: str
     top_k: int
     direct: QueryResponse
     langchain: QueryResponse
     
-
 class UploadResponse(BaseModel):
-    """Response model for file uploads"""
     message: str
     filename: str
     chunks_indexed: int
 
-
-class HealthResponse(BaseModel):
-    """Response model for health check"""
+class IndexHealthResponse(BaseModel):
     status: str
-    collection_stats: dict
+    index_stats: dict
 
 
-@app.get("/health", response_model=HealthResponse)
+# API Endpoints
+
+@app.get("/health", response_model=IndexHealthResponse, summary="Check service health and vector index status")
 async def health_check():
-    """Health check endpoint with collection statistics"""
+    """Health check endpoint with Pinecone index statistics."""
     try:
-        stats = get_collection_stats()
+        # UPDATED: from get_collection_stats to get_index_stats
+        stats = get_index_stats()
         return {
             "status": "ok",
-            "collection_stats": stats
+            "index_stats": stats
         }
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        raise HTTPException(status_code=500, detail="Service unhealthy")
+        logger.error(f"Health check failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Service unhealthy: {e}")
 
 
-@app.post("/upload", response_model=UploadResponse)
+@app.post("/upload", response_model=UploadResponse, summary="Upload and index a PDF document")
 async def upload_pdf(file: UploadFile = File(...)):
+
+    # 1. Validate file metadata
+    file_ext = file.filename.split(".")[-1].lower()
+    if f".{file_ext}" not in settings.ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Invalid file type: {file_ext}")
+
     try:
-        # Validate file extension
-        file_ext = Path(file.filename).suffix.lower()
-        if file_ext not in settings.ALLOWED_EXTENSIONS:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid file type. Allowed: {settings.ALLOWED_EXTENSIONS}"
-            )
+        # 2. Read file content into memory
+        file_content = await file.read()
         
-        # Check file size
-        file.file.seek(0, 2)  # Seek to end
-        file_size = file.file.tell()
-        file.file.seek(0)  # Reset to beginning
+        # 3. Validate file content size
+        if len(file_content) > settings.MAX_FILE_SIZE:
+            mb_size = settings.MAX_FILE_SIZE / 1024 / 1024
+            raise HTTPException(status_code=400, detail=f"File too large. Max size: {mb_size:.1f}MB")
+        if len(file_content) == 0:
+            raise HTTPException(status_code=400, detail="Empty file uploaded.")
+
+        logger.info(f"Uploaded file: {file.filename} ({len(file_content)} bytes)")
+
+        # 4. Upload original PDF to Supabase Storage
+        object_path = upload_pdf_to_supabase(
+            file_content=file_content,
+            filename=file.filename,
+            content_type=file.content_type or "application/pdf",
+        )
+        logger.info(f"Stored PDF in Supabase bucket at: {object_path}")
         
-        if file_size > settings.MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File too large. Max size: {settings.MAX_FILE_SIZE / 1024 / 1024}MB"
-            )
+        # 5. Create an in-memory file-like object
+        file_stream = io.BytesIO(file_content)
         
-        if file_size == 0:
-            raise HTTPException(status_code=400, detail="Empty file")
-        
-        # Save file
-        file_path = settings.UPLOAD_DIR / file.filename
-        
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        logger.info(f"Uploaded file: {file.filename} ({file_size} bytes)")
-        
-        # Index the PDF
-        chunks_count = index_pdf(str(file_path))
+        # 6. Index the PDF using the refactored function
+        chunks_count = index_pdf(file_stream, file.filename)
         
         logger.info(f"Indexed {chunks_count} chunks from {file.filename}")
         
@@ -142,46 +160,39 @@ async def upload_pdf(file: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Upload failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+        logger.error(f"Upload failed for {file.filename}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
 
 
-@app.post("/query", response_model=QueryResponse)
+@app.post("/query", response_model=QueryResponse, summary="Ask a question to the RAG system")
 async def ask_question(request: QueryRequest):
-
+    """Queries the RAG system using the selected engine."""
     try:
         top_k = request.top_k or settings.TOP_K_RESULTS
-        engine = request.engine
+        logger.info(f"Processing {request.engine} query: '{request.question[:50]}...'")
         
-        logger.info(f"Processing {engine} query: {request.question[:50]}...")
-        
-        if engine == "langchain":
-            answer, sources = query_rag_langchain(request.question, top_k=top_k)
-        else:
+        if request.engine == "direct":
             answer, sources = query_rag(request.question, top_k=top_k)
+        else:
+            answer, sources = query_rag_langchain(request.question, top_k=top_k)
         
-        return {
-            "answer": answer,
-            "sources": sources,
-            "engine": engine
-        }
+        return { "answer": answer, "sources": sources, "engine": request.engine }
         
     except Exception as e:
         logger.error(f"Query failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Query failed: {e}")
 
 
-@app.post("/query/compare", response_model=CompareQueryResponse)
+@app.post("/query/compare", response_model=CompareQueryResponse, summary="Compare direct and LangChain query paths")
 async def compare_query_paths(request: CompareQueryRequest):
-    """Run the same query through both direct and LangChain pipelines."""
+    """Runs the same query through both direct and LangChain pipelines."""
     try:
         top_k = request.top_k or settings.TOP_K_RESULTS
-
-        logger.info(f"Comparing query pipelines for: {request.question[:50]}...")
-
+        logger.info(f"Comparing query pipelines for: '{request.question[:50]}...'")
+        
         direct_answer, direct_sources = query_rag(request.question, top_k=top_k)
         lc_answer, lc_sources = query_rag_langchain(request.question, top_k=top_k)
-
+        
         return {
             "question": request.question,
             "top_k": top_k,
@@ -196,34 +207,34 @@ async def compare_query_paths(request: CompareQueryRequest):
                 "engine": "langchain"
             }
         }
-
     except Exception as e:
         logger.error(f"Query comparison failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Query comparison failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Query comparison failed: {e}")
 
 
-@app.delete("/collection")
-async def clear_all_documents():
-    """Clear all documents from the collection"""
+@app.delete("/collection", summary="Clear all documents from the Pinecone index")
+async def clear_pinecone_index():
+    """Deletes all vectors from the configured Pinecone index."""
     try:
-        clear_collection()
-        logger.info("Collection cleared")
-        return {"message": "Collection cleared successfully"}
+        clear_index()
+        logger.info("Pinecone index cleared successfully.")
+        return {"message": "Pinecone index cleared successfully"}
     except Exception as e:
-        logger.error(f"Failed to clear collection: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to clear collection: {str(e)}")
+        logger.error(f"Failed to clear index: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to clear index: {e}")
 
 
-@app.get("/stats")
-async def get_stats():
-    """Get collection statistics"""
+@app.get("/stats", summary="Get statistics about the Pinecone index")
+async def get_index_statistics():
+    """Retrieves and returns statistics from the Pinecone index."""
     try:
-        return get_collection_stats()
+        return get_index_stats()
     except Exception as e:
-        logger.error(f"Failed to get stats: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
+        logger.error(f"Failed to get index stats: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get stats: {e}")
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    logger.info("Starting Uvicorn server for local development...")
+    uvicorn.run(app, host="localhost", port=8000)

@@ -16,11 +16,22 @@ class Settings:
     
     # API Keys
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    PINECONE_API_KEY: str = os.getenv("PINECONE_API_KEY", "")
     HF_TOKEN: str = os.getenv("HF_TOKEN", "")
+
+    # Supabase Storage Configuration
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
+    SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
+    SUPABASE_BUCKET: str = os.getenv("SUPABASE_BUCKET", "")
+    SUPABASE_UPLOAD_PREFIX: str = os.getenv("SUPABASE_UPLOAD_PREFIX", "pdfs")
     
     # Model Configuration
     EMBEDDING_MODEL: str = "nomic-ai/nomic-embed-text-v1.5"  # HuggingFace model
+    EMBEDDING_DIMENSION: int = 768  # Dimension for the embedding model
     CHAT_MODEL: str = "llama-3.1-8b-instant"  # Groq Llama 3.1 8B (current model)
+
+    # --- Vector Database Configuration (Pinecone) ---
+    PINECONE_INDEX_NAME: str = os.getenv("PINECONE_INDEX_NAME", "rag-app")
     
     # Database Configuration
     CHROMA_PERSIST_DIR: Path = BACKEND_DIR / "chroma_db"
@@ -46,6 +57,7 @@ class Settings:
         "http://localhost:3000",
         "http://localhost:8000",
         "http://localhost:5173",
+        "https://talking-pdf-sable.vercel.app"
     ]
     
     def __init__(self):
@@ -60,7 +72,7 @@ class Settings:
         
         # Create upload directory if it doesn't exist
         self.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        
+
         # Create chroma persist directory if it doesn't exist
         self.CHROMA_PERSIST_DIR.mkdir(parents=True, exist_ok=True)
 
