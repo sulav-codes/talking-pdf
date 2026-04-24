@@ -118,7 +118,7 @@ export default function Home() {
                     • <strong>Groq Llama 3.1</strong> - Ultra-fast LLM (FREE)
                   </li>
                   <li>
-                    • <strong>ChromaDB</strong> - Vector database
+                    • <strong>Pinecone</strong> - Vector database
                   </li>
                 </ul>
               </div>
