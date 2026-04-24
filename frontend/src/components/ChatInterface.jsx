@@ -4,6 +4,71 @@ import { useState } from "react";
 import { Send, Loader2, FileText } from "lucide-react";
 import APIService from "@/lib/api";
 
+function renderTextWithBold(text, keyPrefix) {
+  const segments = text.split(/(\*\*[^*]+\*\*)/g);
+
+  return segments.map((segment, index) => {
+    const isBold = segment.startsWith("**") && segment.endsWith("**");
+    if (!isBold) {
+      return <span key={`${keyPrefix}-text-${index}`}>{segment}</span>;
+    }
+
+    return (
+      <strong key={`${keyPrefix}-bold-${index}`} className="font-semibold">
+        {segment.slice(2, -2)}
+      </strong>
+    );
+  });
+}
+
+function renderAssistantContent(content) {
+  const tokens = String(content || "")
+    .split(/(\[Context\s+\d+\])/g)
+    .filter(Boolean);
+  const nodes = [];
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    const contextMatch = token.match(/^\[Context\s+(\d+)\]$/);
+
+    if (contextMatch) {
+      const contextNumber = contextMatch[1];
+      const contextText = (tokens[i + 1] || "").trim();
+
+      nodes.push(
+        <div
+          key={`context-${contextNumber}-${i}`}
+          className="mt-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white/60 dark:bg-gray-900/30 p-3"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 mb-1">
+            Context {contextNumber}
+          </p>
+          <p className="text-sm whitespace-pre-wrap">
+            {renderTextWithBold(contextText, `context-${contextNumber}-${i}`)}
+          </p>
+        </div>,
+      );
+
+      i += 1;
+      continue;
+    }
+
+    if (token.trim()) {
+      nodes.push(
+        <p key={`plain-${i}`} className="text-sm whitespace-pre-wrap">
+          {renderTextWithBold(token, `plain-${i}`)}
+        </p>,
+      );
+    }
+  }
+
+  if (nodes.length === 0) {
+    return <p className="text-sm">No answer returned from the backend.</p>;
+  }
+
+  return <div className="space-y-2">{nodes}</div>;
+}
+
 export default function ChatInterface({ disabled }) {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState([]);
@@ -22,12 +87,8 @@ export default function ChatInterface({ disabled }) {
       const data = await APIService.query(question);
       const assistantMessage = {
         role: "assistant",
-        content:
-          data.answer ||
-          "No answer returned from the backend.",
-        sources:
-          data.sources ||
-          "No sources returned from the backend.",
+        content: data.answer || "No answer returned from the backend.",
+        sources: Array.isArray(data.sources) ? data.sources : [],
       };
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
@@ -74,7 +135,13 @@ export default function ChatInterface({ disabled }) {
                       : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                 }`}
               >
-                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                {message.role === "assistant" ? (
+                  renderAssistantContent(message.content)
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap">
+                    {message.content}
+                  </p>
+                )}
                 {message.sources && message.sources.length > 0 && (
                   <div className="mt-3 pt-3 border-t border-gray-300 dark:border-gray-600">
                     <p className="text-xs font-semibold mb-2 text-gray-700 dark:text-gray-300 flex items-center space-x-1">
