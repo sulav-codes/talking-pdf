@@ -30,6 +30,7 @@ class Settings:
     CHUNK_WORDS: int = int(os.getenv("CHUNK_WORDS", "500"))
     CHUNK_OVERLAP_WORDS: int = int(os.getenv("CHUNK_OVERLAP_WORDS", "50"))
     TOP_K_RESULTS: int = int(os.getenv("TOP_K_RESULTS", "4"))
+    CHAT_MODEL: str = "llama-3.1-8b-instant" 
 
     API_TITLE: str = "Pinecone Semantic Search Backend"
     API_VERSION: str = "3.0.0"
