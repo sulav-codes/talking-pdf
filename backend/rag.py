@@ -1,6 +1,5 @@
 """
 RAG (Retrieval Augmented Generation) implementation using Pinecone, Groq, and LangChain.
-Uses Pinecone's serverless embeddings API to avoid memory overhead of local models.
 """
 import uuid
 import logging
@@ -41,8 +40,13 @@ class PineconeRetriever(BaseRetriever):
             meta = match.get("metadata", {})
             page_content = meta.get("text", "")
 
-            pages_str = meta.get("pages", "")
-            pages = [int(p) for p in pages_str.split(",") if p.strip()] if pages_str else []
+            pages_value = meta.get("pages", "")
+            if isinstance(pages_value, list):
+                pages = [int(p) for p in pages_value if str(p).strip()]
+            elif isinstance(pages_value, str):
+                pages = [int(p) for p in pages_value.split(",") if p.strip()] if pages_value else []
+            else:
+                pages = []
 
             relevant_docs.append(
                 Document(
@@ -66,13 +70,20 @@ def _build_context_from_documents(documents: List[Document]) -> str:
         f"[Context {i + 1}]\n{doc.page_content}" for i, doc in enumerate(documents)
     )
 
+
+def _format_source_with_pages(source: str, pages: List[int]) -> str:
+    if not pages:
+        return source
+
+    page_str = ", ".join([f"p.{page}" for page in pages])
+    return f"{source} ({page_str})"
+
 def _extract_sources_from_documents(documents: List[Document]) -> List[str]:
     sources = []
     for doc in documents:
         source = doc.metadata.get("source", "Unknown")
         pages = doc.metadata.get("pages", [])
-        page_str = f" (p. {', '.join(map(str, pages))})" if pages else ""
-        source_entry = f"{source}{page_str}"
+        source_entry = _format_source_with_pages(source, pages)
         if source_entry not in sources:
             sources.append(source_entry)
     return sources
@@ -119,6 +130,7 @@ def index_pdf(file_stream: io.BytesIO, filename: str) -> int:
         for i in range(0, len(chunks_with_pages), batch_size):
             batch_items = chunks_with_pages[i:i + batch_size]
             batch_texts = [item[0] for item in batch_items]
+            batch_pages = [item[1] for item in batch_items]
             
             # Prepare records with text; Pinecone will embed via serverless API
             records_to_upsert = []
@@ -131,7 +143,7 @@ def index_pdf(file_stream: io.BytesIO, filename: str) -> int:
                     "source": filename,
                     "chunk_index": i + j,
                     "total_chunks": len(chunks_with_pages),
-                    "pages": ",".join(map(str, chunk_pages)) if chunk_pages else "",
+                    "pages": ",".join(map(str, batch_pages[j])) if batch_pages[j] else "",
                 }
                 records_to_upsert.append(record)
             
@@ -147,11 +159,6 @@ def index_pdf(file_stream: io.BytesIO, filename: str) -> int:
     except Exception as e:
         logger.error(f"Indexing failed for {filename}: {e}", exc_info=True)
         raise
-
-
-
-def query_rag(question: str, top_k: int = None) -> Tuple[str, List[str]]:
-    return query_rag_langchain(question, top_k)
 
 
 def query_rag_langchain(question: str, top_k: int = None) -> Tuple[str, List[str]]:
