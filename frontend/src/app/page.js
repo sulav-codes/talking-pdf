@@ -7,6 +7,8 @@ import ChatInterface from "@/components/ChatInterface";
 import StatsPanel from "@/components/StatsPanel";
 import ThemeToggle from "@/components/ThemeToggle";
 import FeatureCards from "@/components/FeatureCards";
+import { ImageConfigContext } from "next/dist/shared/lib/image-config-context.shared-runtime";
+import Image from "next/image";
 
 export default function Home() {
   const [hasDocuments, setHasDocuments] = useState(false);
@@ -20,17 +22,20 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
       {/* Header */}
       <header className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <FileText className="w-6 h-6 text-white" />
-              </div>
+              <Image
+                src="/logo.svg"
+                alt="Talking PDF Logo"
+                width={48}
+                height={48}
+              />
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                <h1 className="text-2xl font-bold text-[#16385A] dark:text-[#80C5E4]">
                   Talking PDF
                 </h1>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -96,7 +101,7 @@ export default function Home() {
                     <FileUpload onUploadSuccess={handleUploadSuccess} />
                   </div>
                 ) : (
-                  <div className="h-[600px]">
+                  <div className="h-150">
                     <ChatInterface disabled={!hasDocuments} />
                   </div>
                 )}
@@ -112,13 +117,14 @@ export default function Home() {
                 </h3>
                 <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
                   <li>
-                    • <strong>Nomic Embed</strong> - Local embeddings (FREE)
+                    • <strong>Pinecone</strong> - Vector database + Auto
+                    Embeddings (FREE)
                   </li>
                   <li>
                     • <strong>Groq Llama 3.1</strong> - Ultra-fast LLM (FREE)
                   </li>
                   <li>
-                    • <strong>Pinecone</strong> - Vector database
+                    • <strong>Supabase Bucket</strong> - PDF storage (FREE)
                   </li>
                 </ul>
               </div>
@@ -129,7 +135,7 @@ export default function Home() {
                 </h3>
                 <ol className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
                   <li>1. Upload your PDF documents</li>
-                  <li>2. Documents are chunked & embedded locally</li>
+                  <li>2. Documents are chunked & embedded by Pinecone</li>
                   <li>3. Ask questions in natural language</li>
                   <li>4. Get instant AI-powered answers</li>
                 </ol>
@@ -148,7 +154,12 @@ export default function Home() {
       <footer className="mt-12 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <p className="text-center text-sm text-gray-600 dark:text-gray-400">
-            Built with Next.js • FastAPI • HuggingFace • Groq
+            Built with
+            <br />
+            Next.js • FastAPI • Pinecone • Groq LLM • HuggingFace • Supabase
+            Bucket • Deployed on Vercel & Render.
+            <br />
+            <br />© 2024 Talking PDF. All rights reserved.
           </p>
         </div>
       </footer>
