@@ -98,9 +98,8 @@ def delete_records_by_upload_id(upload_id: str, namespace: str | None = None) ->
     except Exception as exc:
         message = str(exc).lower()
         status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
-        code = getattr(exc, "code", None)
 
-        if "namespace not found" in message or status == 404 or code == 404:
+        if "namespace not found" in message or status == 404:
             logger.info(
                 "Pinecone namespace '%s' does not exist yet; skipping pre-clean for upload_id=%s",
                 target_namespace,
