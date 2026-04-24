@@ -13,14 +13,14 @@ const features = [
   {
     icon: DollarSign,
     title: "100% Free",
-    description: "Local embeddings + Groq free tier = $0 cost",
+    description: "Pinecone vector database/embeddings + Groq free tier = $0 cost",
     color: "text-green-500",
     bgColor: "bg-green-50 dark:bg-green-950/20",
   },
   {
     icon: Shield,
     title: "Private & Secure",
-    description: "Embeddings run locally on your machine",
+    description: "Pinecone vector database that you can clean up at any time",
     color: "text-blue-500",
     bgColor: "bg-blue-50 dark:bg-blue-950/20",
   },
