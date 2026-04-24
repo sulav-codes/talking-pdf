@@ -6,6 +6,11 @@ import uuid
 import logging
 from typing import Optional, Literal
 from urllib.parse import quote
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 import requests
 
@@ -274,4 +279,4 @@ async def get_index_statistics():
 if __name__ == "__main__":
     import uvicorn
     logger.info("Starting Uvicorn server for local development...")
-    uvicorn.run(app, host="localhost", port=8000)
+    uvicorn.run(app, host=os.getenv("HOST"), port=int(os.getenv("PORT")))
