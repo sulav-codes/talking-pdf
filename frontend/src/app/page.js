@@ -7,7 +7,6 @@ import ChatInterface from "@/components/ChatInterface";
 import StatsPanel from "@/components/StatsPanel";
 import ThemeToggle from "@/components/ThemeToggle";
 import FeatureCards from "@/components/FeatureCards";
-import { ImageConfigContext } from "next/dist/shared/lib/image-config-context.shared-runtime";
 import Image from "next/image";
 
 export default function Home() {
@@ -159,7 +158,7 @@ export default function Home() {
             Next.js • FastAPI • Pinecone • Groq LLM • HuggingFace • Supabase
             Bucket • Deployed on Vercel & Render.
             <br />
-            <br />© 2024 Talking PDF. All rights reserved.
+            <br />© 2026 Talking PDF. All rights reserved.
           </p>
         </div>
       </footer>
