@@ -1,19 +1,15 @@
 """FastAPI app for Pinecone-hosted semantic search."""
-import base64
 import io
-import json
 import logging
 import os
 import re
 import uuid
-from urllib.parse import quote
 from typing import Any, Literal
 
 from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from PyPDF2 import PdfReader
-import requests
 
 from config import settings
 from db import clear_namespace, delete_records_by_upload_id, get_index_stats, pinecone_namespace, search_records, upsert_records
@@ -156,54 +152,22 @@ def _build_answer_and_sources(matches: list[SearchMatch]) -> tuple[str, list[str
     return answer, sources
 
 
-def _is_service_role_key(supabase_key: str) -> bool:
-    if not supabase_key:
-        return False
+def _friendly_ingestion_error(exc: Exception) -> str:
+    message = str(exc).lower()
+    status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
 
-    if supabase_key.startswith("sb_secret_"):
-        return True
-    if supabase_key.startswith("sb_publishable_") or supabase_key.startswith("sb_anon_"):
-        return False
-
-    parts = supabase_key.split(".")
-    if len(parts) == 3:
-        try:
-            payload = parts[1]
-            padding = "=" * (-len(payload) % 4)
-            data = base64.urlsafe_b64decode(payload + padding).decode("utf-8")
-            claims = json.loads(data)
-            return claims.get("role") == "service_role"
-        except Exception:
-            return True
-
-    return True
-
-
-def upload_pdf_to_supabase(file_content: bytes, filename: str, content_type: str = "application/pdf") -> str:
-    if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY or not settings.SUPABASE_BUCKET:
-        raise RuntimeError(
-            "Supabase storage is not configured. Set SUPABASE_URL, SUPABASE_SERVICE_KEY, and SUPABASE_BUCKET."
+    if (
+        status == 429
+        or "too many requests" in message
+        or "resource_exhausted" in message
+        or "max tokens per minute" in message
+    ):
+        return (
+            "The indexing service is currently rate-limited. "
+            "Please wait a minute and try uploading again."
         )
 
-    if not _is_service_role_key(settings.SUPABASE_SERVICE_KEY):
-        raise RuntimeError("Supabase upload blocked: use a service-role key, not anon/publishable key.")
-
-    object_path = f"{settings.SUPABASE_UPLOAD_PREFIX.strip('/')}/{uuid.uuid4()}-{filename}"
-    encoded_object_path = quote(object_path, safe="/-_.")
-    endpoint = f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/{settings.SUPABASE_BUCKET}/{encoded_object_path}"
-
-    headers = {
-        "Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}",
-        "apikey": settings.SUPABASE_SERVICE_KEY,
-        "Content-Type": content_type,
-        "x-upsert": "true",
-    }
-
-    response = requests.post(endpoint, headers=headers, data=file_content, timeout=30)
-    if response.status_code not in (200, 201):
-        raise RuntimeError(f"Supabase upload failed ({response.status_code}): {response.text}")
-
-    return object_path
+    return "We could not index this file right now. Please try again shortly."
 
 
 @app.get("/health", response_model=IndexHealthResponse)
@@ -235,17 +199,6 @@ async def upload_pdf(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Empty file uploaded")
     if len(file_content) > settings.MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File too large")
-
-    try:
-        object_path = upload_pdf_to_supabase(
-            file_content=file_content,
-            filename=file.filename,
-            content_type=file.content_type or "application/pdf",
-        )
-        logger.info("Stored PDF in Supabase at %s", object_path)
-    except Exception as exc:
-        logger.exception("Supabase upload failed")
-        raise HTTPException(status_code=500, detail=f"Supabase upload failed: {exc}") from exc
 
     page_texts = _extract_pdf_pages(file_content)
     if not page_texts:
@@ -284,7 +237,7 @@ async def upload_pdf(file: UploadFile = File(...)):
             delete_records_by_upload_id(upload_id)
         except Exception:
             logger.exception("Rollback cleanup failed for upload %s", upload_id)
-        raise HTTPException(status_code=500, detail=f"Pinecone ingestion failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail=_friendly_ingestion_error(exc)) from exc
 
     return {
         "message": "File indexed successfully",
