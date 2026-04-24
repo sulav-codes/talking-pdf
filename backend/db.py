@@ -21,10 +21,12 @@ pinecone_namespace = settings.PINECONE_NAMESPACE or "default"
 def _to_dict(value: Any) -> dict:
     if isinstance(value, dict):
         return value
-    if hasattr(value, "model_dump"):
-        return value.model_dump()
-    if hasattr(value, "dict"):
-        return value.dict()
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        return model_dump()
+    as_dict = getattr(value, "dict", None)
+    if callable(as_dict):
+        return as_dict()
     return dict(getattr(value, "__dict__", {}))
 
 
@@ -38,10 +40,12 @@ def _extract_hits(payload: Any) -> list[Any]:
         return []
     if isinstance(result, dict):
         return result.get("hits", [])
-    if hasattr(result, "model_dump"):
-        return result.model_dump().get("hits", [])
-    if hasattr(result, "dict"):
-        return result.dict().get("hits", [])
+    result_model_dump = getattr(result, "model_dump", None)
+    if callable(result_model_dump):
+        return result_model_dump().get("hits", [])
+    result_dict = getattr(result, "dict", None)
+    if callable(result_dict):
+        return result_dict().get("hits", [])
     return list(getattr(result, "hits", []) or [])
 
 
