@@ -70,10 +70,25 @@ def upsert_records(records: list[dict], namespace: str | None = None) -> Any:
 def delete_records_by_upload_id(upload_id: str, namespace: str | None = None) -> None:
     # Delete all records that belong to a specific upload attempt.
     target_namespace = namespace or pinecone_namespace
-    pinecone_index.delete(
-        filter={"upload_id": {"$eq": upload_id}},
-        namespace=target_namespace,
-    )
+    try:
+        pinecone_index.delete(
+            filter={"upload_id": {"$eq": upload_id}},
+            namespace=target_namespace,
+        )
+    except Exception as exc:
+        message = str(exc).lower()
+        status = getattr(exc, "status_code", None) or getattr(exc, "status", None)
+        code = getattr(exc, "code", None)
+
+        if "namespace not found" in message or status == 404 or code == 404:
+            logger.info(
+                "Pinecone namespace '%s' does not exist yet; skipping pre-clean for upload_id=%s",
+                target_namespace,
+                upload_id,
+            )
+            return
+
+        raise
 
 
 def search_records(query_text: str, top_k: int, namespace: str | None = None) -> list[dict]:
