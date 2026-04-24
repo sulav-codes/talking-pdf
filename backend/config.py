@@ -17,7 +17,7 @@ class Settings:
     PINECONE_INDEX_NAME: str = os.getenv("PINECONE_INDEX_NAME", "")
     PINECONE_NAMESPACE: str = os.getenv("PINECONE_NAMESPACE", "default")
     PINECONE_EMBEDDING_MODEL: str = os.getenv("PINECONE_EMBEDDING_MODEL", "llama-text-embed-v2")
-    PINECONE_TEXT_FIELD: str = os.getenv("PINECONE_TEXT_FIELD", "chunk_text")
+    PINECONE_TEXT_FIELD: str = os.getenv("PINECONE_TEXT_FIELD", "text")
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
 
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")

@@ -214,7 +214,7 @@ async def upload_pdf(file: UploadFile = File(...)):
             {
                 "_id": f"{upload_id}-{index}",
                 "upload_id": upload_id,
-                settings.PINECONE_TEXT_FIELD: chunk_text,
+                "text": chunk_text,
                 "source": file.filename,
                 "chunk_index": index,
                 "total_chunks": total_chunks,

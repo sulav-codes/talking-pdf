@@ -39,7 +39,7 @@ class PineconeRetriever(BaseRetriever):
         relevant_docs: List[Document] = []
         for match in results:
             meta = match.get("metadata", {})
-            page_content = meta.get(settings.PINECONE_TEXT_FIELD, meta.get("text", ""))
+            page_content = meta.get("text", "")
 
             pages_str = meta.get("pages", "")
             pages = [int(p) for p in pages_str.split(",") if p.strip()] if pages_str else []
@@ -127,7 +127,7 @@ def index_pdf(file_stream: io.BytesIO, filename: str) -> int:
                 vector_id = str(uuid.uuid4())
                 record = {
                     "_id": vector_id,
-                    settings.PINECONE_TEXT_FIELD: text_chunk,
+                    "text": text_chunk,
                     "source": filename,
                     "chunk_index": i + j,
                     "total_chunks": len(chunks_with_pages),
