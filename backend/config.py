@@ -18,6 +18,7 @@ class Settings:
     PINECONE_NAMESPACE: str = os.getenv("PINECONE_NAMESPACE", "default")
     PINECONE_EMBEDDING_MODEL: str = os.getenv("PINECONE_EMBEDDING_MODEL", "llama-text-embed-v2")
     PINECONE_TEXT_FIELD: str = os.getenv("PINECONE_TEXT_FIELD", "chunk_text")
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
 
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
     SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
@@ -45,6 +46,8 @@ class Settings:
             raise ValueError("PINECONE_API_KEY environment variable is required")
         if not self.PINECONE_INDEX_HOST and not self.PINECONE_INDEX_NAME:
             raise ValueError("PINECONE_INDEX_HOST or PINECONE_INDEX_NAME environment variable is required")
+        if not self.GROQ_API_KEY:
+            raise ValueError("GROQ_API_KEY environment variable is required")
 
 
 settings = Settings()

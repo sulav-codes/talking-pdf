@@ -46,7 +46,7 @@ def _extract_hits(payload: Any) -> list[Any]:
 
 
 def get_index_stats() -> dict:
-    """Return lightweight index stats for health checks."""
+    # Return lightweight index stats for health checks.
     stats = _to_dict(pinecone_index.describe_index_stats())
     return {
         "name": settings.PINECONE_INDEX_NAME or settings.PINECONE_INDEX_HOST,
@@ -58,13 +58,22 @@ def get_index_stats() -> dict:
 
 
 def upsert_records(records: list[dict], namespace: str | None = None) -> Any:
-    """Upsert raw text records into Pinecone with integrated embeddings."""
+    # Upsert raw text records into Pinecone with integrated embeddings.
     target_namespace = namespace or pinecone_namespace
     return pinecone_index.upsert_records(target_namespace, records)
 
 
+def delete_records_by_upload_id(upload_id: str, namespace: str | None = None) -> None:
+    # Delete all records that belong to a specific upload attempt.
+    target_namespace = namespace or pinecone_namespace
+    pinecone_index.delete(
+        filter={"upload_id": {"$eq": upload_id}},
+        namespace=target_namespace,
+    )
+
+
 def search_records(query_text: str, top_k: int, namespace: str | None = None) -> list[dict]:
-    """Semantic search using Pinecone hosted embeddings."""
+    #Semantic search using Pinecone hosted embeddings.
     target_namespace = namespace or pinecone_namespace
     response = pinecone_index.search(
         namespace=target_namespace,
@@ -88,6 +97,6 @@ def search_records(query_text: str, top_k: int, namespace: str | None = None) ->
 
 
 def clear_namespace(namespace: str | None = None) -> None:
-    """Delete all records from the configured namespace."""
+    # Delete all records from the configured namespace.
     target_namespace = namespace or pinecone_namespace
     pinecone_index.delete(delete_all=True, namespace=target_namespace)

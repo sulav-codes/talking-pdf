@@ -16,7 +16,7 @@ from PyPDF2 import PdfReader
 import requests
 
 from config import settings
-from db import clear_namespace, get_index_stats, pinecone_namespace, search_records, upsert_records
+from db import clear_namespace, delete_records_by_upload_id, get_index_stats, pinecone_namespace, search_records, upsert_records
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -173,8 +173,11 @@ async def upload_pdf(file: UploadFile = File(...)):
     if not file.filename:
         raise HTTPException(status_code=400, detail="Missing filename")
 
-    file_ext = file.filename.rsplit(".", 1)[-1].lower()
-    if f".{file_ext}" not in settings.ALLOWED_EXTENSIONS:
+    _, file_ext = os.path.splitext(file.filename)
+    file_ext = file_ext.lower()
+    if not file_ext:
+        raise HTTPException(status_code=400, detail="Missing file extension")
+    if file_ext not in settings.ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Invalid file type: {file_ext}")
 
     file_content = await file.read()
@@ -199,13 +202,15 @@ async def upload_pdf(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="No extractable text found in PDF")
 
     chunks = _approx_token_chunks(text, settings.CHUNK_WORDS, settings.CHUNK_OVERLAP_WORDS)
+    upload_id = str(uuid.uuid4())
     records: list[dict[str, Any]] = []
     total_chunks = len(chunks)
 
     for index, chunk_text in enumerate(chunks):
         records.append(
             {
-                "_id": f"{file.filename}-{index}",
+                "_id": f"{upload_id}-{index}",
+                "upload_id": upload_id,
                 settings.PINECONE_TEXT_FIELD: chunk_text,
                 "source": file.filename,
                 "chunk_index": index,
@@ -214,8 +219,17 @@ async def upload_pdf(file: UploadFile = File(...)):
         )
 
     batch_size = 96
-    for start in range(0, len(records), batch_size):
-        upsert_records(records[start : start + batch_size])
+    try:
+        delete_records_by_upload_id(upload_id)
+        for start in range(0, len(records), batch_size):
+            upsert_records(records[start : start + batch_size])
+    except Exception as exc:
+        logger.exception("Pinecone ingestion failed, cleaning up upload %s", upload_id)
+        try:
+            delete_records_by_upload_id(upload_id)
+        except Exception:
+            logger.exception("Rollback cleanup failed for upload %s", upload_id)
+        raise HTTPException(status_code=500, detail=f"Pinecone ingestion failed: {exc}") from exc
 
     return {
         "message": "File indexed successfully",
