@@ -9,7 +9,7 @@ import uuid
 from urllib.parse import quote
 from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from PyPDF2 import PdfReader
@@ -160,8 +160,11 @@ def upload_pdf_to_supabase(file_content: bytes, filename: str, content_type: str
 
 
 @app.get("/health", response_model=IndexHealthResponse)
-async def health_check():
+async def health_check(response: Response):
     try:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
         return {"status": "ok", "index_stats": get_index_stats()}
     except Exception as exc:
         logger.exception("Health check failed")
