@@ -118,6 +118,16 @@ def _extract_pdf_text(file_content: bytes) -> str:
     return "\n\n".join(pages)
 
 
+def _extract_pdf_pages(file_content: bytes) -> list[tuple[int, str]]:
+    reader = PdfReader(io.BytesIO(file_content))
+    pages: list[tuple[int, str]] = []
+    for page_number, page in enumerate(reader.pages, start=1):
+        page_text = (page.extract_text() or "").strip()
+        if page_text:
+            pages.append((page_number, page_text))
+    return pages
+
+
 def _normalize_hit(hit: dict[str, Any]) -> SearchMatch:
     return SearchMatch(
         id=str(hit.get("_id") or hit.get("id") or ""),
@@ -237,26 +247,31 @@ async def upload_pdf(file: UploadFile = File(...)):
         logger.exception("Supabase upload failed")
         raise HTTPException(status_code=500, detail=f"Supabase upload failed: {exc}") from exc
 
-    text = _extract_pdf_text(file_content)
-    if not text.strip():
+    page_texts = _extract_pdf_pages(file_content)
+    if not page_texts:
         raise HTTPException(status_code=400, detail="No extractable text found in PDF")
 
-    chunks = _approx_token_chunks(text, settings.CHUNK_WORDS, settings.CHUNK_OVERLAP_WORDS)
     upload_id = str(uuid.uuid4())
     records: list[dict[str, Any]] = []
-    total_chunks = len(chunks)
 
-    for index, chunk_text in enumerate(chunks):
-        records.append(
-            {
-                "_id": f"{upload_id}-{index}",
-                "upload_id": upload_id,
-                "text": chunk_text,
-                "source": file.filename,
-                "chunk_index": index,
-                "total_chunks": total_chunks,
-            }
-        )
+    for page_number, page_text in page_texts:
+        page_chunks = _approx_token_chunks(page_text, settings.CHUNK_WORDS, settings.CHUNK_OVERLAP_WORDS)
+        for chunk_text in page_chunks:
+            records.append(
+                {
+                    "_id": "",
+                    "upload_id": upload_id,
+                    "text": chunk_text,
+                    "source": file.filename,
+                    "pages": str(page_number),
+                }
+            )
+
+    total_chunks = len(records)
+    for index, record in enumerate(records):
+        record["_id"] = f"{upload_id}-{index}"
+        record["chunk_index"] = index
+        record["total_chunks"] = total_chunks
 
     batch_size = 96
     try:
