@@ -1,6 +1,8 @@
 """Utility functions for text extraction and processing"""
+import io
 import re
 import logging
+from os import PathLike
 from typing import List
 from pathlib import Path
 
@@ -12,10 +14,13 @@ logger = logging.getLogger(__name__)
 def extract_text(file_input) -> tuple:
 
     try:
-        # Handle both file paths and file-like objects (BytesIO)
-        if isinstance(file_input, str):
+        # Handle filesystem paths.
+        if isinstance(file_input, (str, PathLike)):
             if not Path(file_input).exists():
                 raise FileNotFoundError(f"File not found: {file_input}")
+        # Handle in-memory streams (e.g., io.BytesIO from upload endpoint).
+        elif isinstance(file_input, io.IOBase):
+            file_input.seek(0)
         
         reader = PdfReader(file_input)
         

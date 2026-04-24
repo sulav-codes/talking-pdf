@@ -100,7 +100,18 @@ def _extract_sources_from_documents(documents: List[Document]) -> List[str]:
     return sources
 
 def _invoke_groq_from_prompt(prompt_value: Any) -> str:
-    messages = [{"role": m.type, "content": m.content} for m in prompt_value.to_messages()]
+    role_map = {
+        "human": "user",
+        "ai": "assistant",
+        "system": "system",
+    }
+
+    messages = []
+    for msg in prompt_value.to_messages():
+        role = role_map.get(msg.type, "user")
+        content = msg.content if isinstance(msg.content, str) else str(msg.content)
+        messages.append({"role": role, "content": content})
+
     chat_response = groq_client.chat.completions.create(
         model=settings.CHAT_MODEL, messages=messages, temperature=0.7, max_tokens=1000
     )
