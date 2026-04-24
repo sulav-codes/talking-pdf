@@ -1,5 +1,6 @@
 """
 RAG (Retrieval Augmented Generation) implementation using Pinecone, Groq, and LangChain.
+Uses Pinecone's serverless embeddings API to avoid memory overhead of local models.
 """
 import uuid
 import logging
@@ -7,7 +8,6 @@ import io
 from typing import Tuple, List, Any
 
 from groq import Groq
-from sentence_transformers import SentenceTransformer
 from pydantic import ConfigDict, Field
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
@@ -21,36 +21,24 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
-# --- INITIALIZE MODELS AND CLIENTS (Unchanged) ---
+# --- INITIALIZE CLIENTS ---
 groq_client = Groq(api_key=settings.GROQ_API_KEY)
 
-logger.info(f"Loading embedding model: {settings.EMBEDDING_MODEL}")
-embedding_model = SentenceTransformer(
-    settings.EMBEDDING_MODEL,
-    trust_remote_code=True,
-    token=settings.HF_TOKEN if settings.HF_TOKEN else None
-)
-logger.info("Embedding model loaded successfully")
+logger.info("RAG system initialized with Pinecone serverless embeddings")
 
 class PineconeRetriever(BaseRetriever):
-    """LangChain retriever backed by a Pinecone index."""
+    """LangChain retriever backed by a Pinecone index using serverless embeddings."""
 
     index: Any = Field(...)
-    embedding_model: SentenceTransformer = Field(...)
     default_k: int = Field(default=settings.TOP_K_RESULTS)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def _get_relevant_documents(self, query: str, *, run_manager: Any = None) -> List[Document]:
-        """Synchronous retrieval of documents from Pinecone."""
-        query_embedding = self.embedding_model.encode(
-            query,
-            show_progress_bar=False,
-            convert_to_numpy=True
-        ).tolist()
-
+        """Synchronous retrieval of documents from Pinecone using serverless embeddings."""
+        # Pinecone will handle embedding generation via its serverless API
         results = self.index.query(
-            vector=query_embedding,
+            text=query,  # Pass raw text; Pinecone embeds it server-side
             top_k=self.default_k,
             include_metadata=True
         )
@@ -58,10 +46,8 @@ class PineconeRetriever(BaseRetriever):
         relevant_docs: List[Document] = []
         for match in results.get("matches", []):
             meta = match.get("metadata", {})
-            # The document text is now stored in the 'text' field of the metadata
             page_content = meta.get("text", "")
 
-            # Reconstruct the Document object
             pages_str = meta.get("pages", "")
             pages = [int(p) for p in pages_str.split(",") if p.strip()] if pages_str else []
 
@@ -121,6 +107,7 @@ def _invoke_groq_from_prompt(prompt_value: Any) -> str:
 def index_pdf(file_stream: io.BytesIO, filename: str) -> int:
     """
     Extracts text from an in-memory PDF file, chunks it, and indexes it in Pinecone.
+    Uses Pinecone's serverless embeddings API to avoid local memory overhead.
     
     Args:
         file_stream: A file-like object (BytesIO) containing the PDF content.
@@ -132,7 +119,6 @@ def index_pdf(file_stream: io.BytesIO, filename: str) -> int:
     try:
         logger.info(f"Starting indexing for: {filename}")
         
-        # NOTE: Assumes `extract_text` can handle a file-like object.
         text, page_map = extract_text(file_stream)
         
         if not text or len(text.strip()) < 10:
@@ -153,25 +139,21 @@ def index_pdf(file_stream: io.BytesIO, filename: str) -> int:
             batch_items = chunks_with_pages[i:i + batch_size]
             batch_texts = [item[0] for item in batch_items]
             
-            embeddings = embedding_model.encode(
-                batch_texts, show_progress_bar=False, convert_to_numpy=True
-            ).tolist()
-            
-            # Prepare vectors in the format Pinecone expects: (id, values, metadata)
+            # Prepare vectors with text; Pinecone will embed via serverless API
             vectors_to_upsert = []
             for j, text_chunk in enumerate(batch_texts):
                 chunk_pages = batch_items[j][1]
                 vector_id = str(uuid.uuid4())
                 metadata = {
-                    "text": text_chunk,  # IMPORTANT: Store the text in the metadata
+                    "text": text_chunk,
                     "source": filename,
                     "chunk_index": i + j,
                     "total_chunks": len(chunks_with_pages),
                     "pages": ",".join(map(str, chunk_pages)) if chunk_pages else ""
                 }
-                vectors_to_upsert.append((vector_id, embeddings[j], metadata))
+                vectors_to_upsert.append((vector_id, [], metadata))  # Empty vector list; Pinecone computes embeddings
             
-            # Upsert batch to Pinecone
+            # Upsert batch to Pinecone (embeddings computed server-side)
             pinecone_index.upsert(vectors=vectors_to_upsert)
             
             total_indexed += len(batch_texts)
@@ -193,16 +175,15 @@ def query_rag(question: str, top_k: int = None) -> Tuple[str, List[str]]:
 
 def query_rag_langchain(question: str, top_k: int = None) -> Tuple[str, List[str]]:
     """
-    Queries the RAG system using the Pinecone retriever and a LangChain pipeline.
+    Queries the RAG system using the Pinecone retriever with serverless embeddings.
     """
     try:
         k = top_k if top_k is not None else settings.TOP_K_RESULTS
         logger.info(f"Processing LangChain query with top_k={k}")
 
-        # Use our new PineconeRetriever
+        # Use our new PineconeRetriever (uses Pinecone's serverless embeddings)
         retriever = PineconeRetriever(
             index=pinecone_index,
-            embedding_model=embedding_model,
             default_k=k
         )
 

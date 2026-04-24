@@ -1,88 +1,93 @@
-"""Database configuration and initialization for Pinecone"""
+"""Pinecone client and index helpers."""
 import logging
+from typing import Any
+
 from pinecone import Pinecone
 
-# Use the refactored, cloud-ready settings
 from config import settings
 
 logger = logging.getLogger(__name__)
 
-# This will be our global Pinecone index object
-pinecone_index = None
-pinecone_index_name = settings.PINECONE_INDEX_NAME
+pc = Pinecone(api_key=settings.PINECONE_API_KEY)
 
-try:
-    # 1. Initialize Pinecone Client
-    logger.info("Initializing Pinecone client...")
-    pc = Pinecone(api_key=settings.PINECONE_API_KEY)
-    
-    index_name = settings.PINECONE_INDEX_NAME
+if settings.PINECONE_INDEX_HOST:
+    pinecone_index = pc.Index(host=settings.PINECONE_INDEX_HOST)
+else:
+    pinecone_index = pc.Index(settings.PINECONE_INDEX_NAME)
 
-    # 2. Check if the index exists. If not, raise an error.
-    # In a cloud setup, we assume the index has been created beforehand.
-    if index_name not in pc.list_indexes().names():
-        logger.error(f"Pinecone index '{index_name}' not found!")
-        logger.error("Please create the index in the Pinecone console with the following specs:")
-        logger.error(f"  - Name: {index_name}")
-        logger.error(f"  - Dimension: {settings.EMBEDDING_DIMENSION}")
-        logger.error("  - Metric: cosine")
-        raise NameError(f"Pinecone index '{index_name}' does not exist.")
+pinecone_namespace = settings.PINECONE_NAMESPACE or "default"
 
-    # 3. Connect to the existing index
-    pinecone_index = pc.Index(index_name)
-    
-    logger.info(f"Successfully connected to Pinecone index: '{index_name}'")
-    
-    # Optional: Log initial stats
-    stats = pinecone_index.describe_index_stats()
-    logger.info(f"Index stats: {stats}")
 
-except Exception as e:
-    logger.error(f"Failed to initialize Pinecone: {e}")
-    # Re-raise the exception to halt application startup if the DB isn't available
-    raise
+def _to_dict(value: Any) -> dict:
+    if isinstance(value, dict):
+        return value
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+    if hasattr(value, "dict"):
+        return value.dict()
+    return dict(getattr(value, "__dict__", {}))
+
+
+def _extract_hits(payload: Any) -> list[Any]:
+    if isinstance(payload, dict):
+        result = payload.get("result", {})
+        return result.get("hits", []) if isinstance(result, dict) else []
+
+    result = getattr(payload, "result", None)
+    if result is None:
+        return []
+    if isinstance(result, dict):
+        return result.get("hits", [])
+    if hasattr(result, "model_dump"):
+        return result.model_dump().get("hits", [])
+    if hasattr(result, "dict"):
+        return result.dict().get("hits", [])
+    return list(getattr(result, "hits", []) or [])
 
 
 def get_index_stats() -> dict:
-    """
-    Get statistics about the current Pinecone index.
-
-    Returns:
-        Dictionary with index statistics.
-    """
-    if not pinecone_index:
-        return {"error": "Pinecone index not initialized"}
-        
-    try:
-        stats = pinecone_index.describe_index_stats()
-        return {
-            "name": pinecone_index_name,
-            "vector_count": stats.get('total_vector_count', 0),
-            "dimension": stats.get('dimension', 0),
-            "index_fullness": stats.get('index_fullness', 0.0),
-        }
-    except Exception as e:
-        logger.error(f"Failed to get Pinecone index stats: {e}")
-        return {
-            "name": settings.PINECONE_INDEX_NAME,
-            "vector_count": 0,
-            "error": str(e)
-        }
+    """Return lightweight index stats for health checks."""
+    stats = _to_dict(pinecone_index.describe_index_stats())
+    return {
+        "name": settings.PINECONE_INDEX_NAME or settings.PINECONE_INDEX_HOST,
+        "namespace": pinecone_namespace,
+        "vector_count": stats.get("total_vector_count", 0),
+        "dimension": stats.get("dimension", 0),
+        "index_fullness": stats.get("index_fullness", 0.0),
+    }
 
 
-def clear_index():
-    """
-    Clear all vectors from the Pinecone index.
-    This does NOT delete the index itself.
-    """
-    if not pinecone_index:
-        raise ConnectionError("Pinecone index not initialized, cannot clear.")
-        
-    try:
-        # The 'delete_all' parameter removes all vectors from the index
-        pinecone_index.delete(delete_all=True)
-        logger.info(f"All vectors cleared from index '{pinecone_index_name}'.")
-        
-    except Exception as e:
-        logger.error(f"Failed to clear Pinecone index: {e}")
-        raise
+def upsert_records(records: list[dict], namespace: str | None = None) -> Any:
+    """Upsert raw text records into Pinecone with integrated embeddings."""
+    target_namespace = namespace or pinecone_namespace
+    return pinecone_index.upsert_records(target_namespace, records)
+
+
+def search_records(query_text: str, top_k: int, namespace: str | None = None) -> list[dict]:
+    """Semantic search using Pinecone hosted embeddings."""
+    target_namespace = namespace or pinecone_namespace
+    response = pinecone_index.search(
+        namespace=target_namespace,
+        query={"inputs": {"text": query_text}, "top_k": top_k},
+    )
+
+    hits = _extract_hits(response)
+
+    normalized_hits: list[dict] = []
+    for hit in hits:
+        hit_dict = _to_dict(hit)
+        normalized_hits.append(
+            {
+                "id": hit_dict.get("_id") if hit_dict.get("_id") is not None else hit_dict.get("id"),
+                "score": hit_dict.get("_score") if hit_dict.get("_score") is not None else hit_dict.get("score"),
+                "metadata": hit_dict.get("fields") or hit_dict.get("metadata") or {},
+            }
+        )
+
+    return normalized_hits
+
+
+def clear_namespace(namespace: str | None = None) -> None:
+    """Delete all records from the configured namespace."""
+    target_namespace = namespace or pinecone_namespace
+    pinecone_index.delete(delete_all=True, namespace=target_namespace)
