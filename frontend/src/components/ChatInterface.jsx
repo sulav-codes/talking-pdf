@@ -28,9 +28,23 @@ export default function ChatInterface({ disabled }) {
       const data = await APIService.query(question, 4, engine);
       const assistantMessage = {
         role: "assistant",
-        content: data.answer,
-        sources: data.sources,
-        engine: data.engine,
+        content:
+          data.answer ||
+          data.matches?.[0]?.metadata?.text ||
+          data.matches?.[0]?.metadata?.source ||
+          "No answer returned from the backend.",
+        sources:
+          data.sources ||
+          data.matches
+            ?.map((match) => {
+              const source = match?.metadata?.source;
+              const pages = match?.metadata?.pages;
+              if (!source) return null;
+              return pages ? `${source} (p. ${pages})` : source;
+            })
+            .filter(Boolean) ||
+          [],
+        engine: data.engine || "search",
       };
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
