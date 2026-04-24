@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 # This will be our global Pinecone index object
 pinecone_index = None
+pinecone_index_name = settings.PINECONE_INDEX_NAME
 
 try:
     # 1. Initialize Pinecone Client
@@ -55,7 +56,7 @@ def get_index_stats() -> dict:
     try:
         stats = pinecone_index.describe_index_stats()
         return {
-            "name": pinecone_index.name,
+            "name": pinecone_index_name,
             "vector_count": stats.get('total_vector_count', 0),
             "dimension": stats.get('dimension', 0),
             "index_fullness": stats.get('index_fullness', 0.0),
@@ -80,7 +81,7 @@ def clear_index():
     try:
         # The 'delete_all' parameter removes all vectors from the index
         pinecone_index.delete(delete_all=True)
-        logger.info(f"All vectors cleared from index '{pinecone_index.name}'.")
+        logger.info(f"All vectors cleared from index '{pinecone_index_name}'.")
         
     except Exception as e:
         logger.error(f"Failed to clear Pinecone index: {e}")

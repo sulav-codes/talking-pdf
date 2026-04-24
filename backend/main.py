@@ -1,5 +1,7 @@
 """Main FastAPI application for RAG Chatbot Backend - Cloud Ready"""
+import base64
 import io
+import json
 import uuid
 import logging
 from typing import Optional, Literal
@@ -24,11 +26,43 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _is_service_role_key(supabase_key: str) -> bool:
+    """Best-effort check that key is service-role or secret key, not anon/publishable."""
+    if not supabase_key:
+        return False
+
+    if supabase_key.startswith("sb_secret_"):
+        return True
+    if supabase_key.startswith("sb_publishable_") or supabase_key.startswith("sb_anon_"):
+        return False
+
+    # Legacy JWT-style keys: decode payload and check role claim when possible.
+    parts = supabase_key.split(".")
+    if len(parts) == 3:
+        try:
+            payload = parts[1]
+            padding = "=" * (-len(payload) % 4)
+            data = base64.urlsafe_b64decode(payload + padding).decode("utf-8")
+            claims = json.loads(data)
+            return claims.get("role") == "service_role"
+        except Exception:
+            # If parsing fails, let request proceed and rely on Supabase response.
+            return True
+
+    return True
+
+
 def upload_pdf_to_supabase(file_content: bytes, filename: str, content_type: str = "application/pdf") -> str:
     """Upload PDF bytes to Supabase Storage and return the object path."""
     if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_KEY or not settings.SUPABASE_BUCKET:
         raise RuntimeError(
-            "Supabase storage is not configured. Set SUPABASE_URL, SUPABASE_SERVICE_KEY, and SUPABASE_BUCKET."
+            "Supabase storage is not configured. Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SERVICE_KEY), and SUPABASE_BUCKET."
+        )
+
+    if not _is_service_role_key(settings.SUPABASE_SERVICE_KEY):
+        raise RuntimeError(
+            "Supabase upload blocked: use a service-role key, not anon/publishable key. "
+            "Set SUPABASE_SERVICE_ROLE_KEY in backend .env."
         )
 
     object_path = f"{settings.SUPABASE_UPLOAD_PREFIX.strip('/')}/{uuid.uuid4()}-{filename}"
@@ -44,7 +78,10 @@ def upload_pdf_to_supabase(file_content: bytes, filename: str, content_type: str
 
     response = requests.post(endpoint, headers=headers, data=file_content, timeout=30)
     if response.status_code not in (200, 201):
-        raise RuntimeError(f"Supabase upload failed ({response.status_code}): {response.text}")
+        raise RuntimeError(
+            f"Supabase upload failed ({response.status_code}): {response.text}. "
+            "If message mentions RLS, ensure backend uses SUPABASE_SERVICE_ROLE_KEY and URL/key belong to same project."
+        )
 
     return object_path
 
