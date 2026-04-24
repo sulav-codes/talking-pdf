@@ -194,12 +194,11 @@ async def upload_pdf(file: UploadFile = File(...)):
     if file_ext not in settings.ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Invalid file type: {file_ext}")
 
-    if len(file_content) > settings.MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="File too large")
-    
     file_content = await file.read()
     if not file_content:
         raise HTTPException(status_code=400, detail="Empty file uploaded")
+    if len(file_content) > settings.MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large")
 
     page_texts = _extract_pdf_pages(file_content)
     if not page_texts:
