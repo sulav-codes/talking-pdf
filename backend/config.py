@@ -35,11 +35,7 @@ class Settings:
     API_VERSION: str = "3.0.0"
     API_DESCRIPTION: str = "FastAPI backend using Pinecone integrated embeddings for text ingestion and semantic search."
 
-    CORS_ORIGINS: list[str] = [
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "http://localhost:5173",
-    ]
+    CORS_ORIGINS: list[str] = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "").split(",") if origin.strip()]
 
     def __init__(self):
         if not self.PINECONE_API_KEY:
