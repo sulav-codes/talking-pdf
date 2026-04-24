@@ -17,7 +17,7 @@ import requests
 
 from config import settings
 from db import clear_namespace, delete_records_by_upload_id, get_index_stats, pinecone_namespace, search_records, upsert_records
-from rag import query_rag, query_rag_langchain
+from rag import query_rag_langchain
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
