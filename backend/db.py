@@ -49,6 +49,26 @@ def _extract_hits(payload: Any) -> list[Any]:
     return list(getattr(result, "hits", []) or [])
 
 
+def _extract_value(item: Any, key: str) -> Any:
+    if isinstance(item, dict):
+        return item.get(key)
+    return getattr(item, key, None)
+
+
+def _extract_metadata(item: Any) -> dict[str, Any]:
+    metadata = _extract_value(item, "metadata")
+    if metadata is None:
+        metadata = _extract_value(item, "fields")
+
+    if isinstance(metadata, dict):
+        return metadata
+
+    if metadata is None:
+        return {}
+
+    return _to_dict(metadata)
+
+
 def get_index_stats() -> dict:
     # Return lightweight index stats for health checks.
     stats = _to_dict(pinecone_index.describe_index_stats())
@@ -103,12 +123,15 @@ def search_records(query_text: str, top_k: int, namespace: str | None = None) ->
 
     normalized_hits: list[dict] = []
     for hit in hits:
-        hit_dict = _to_dict(hit)
+        hit_id = _extract_value(hit, "_id") or _extract_value(hit, "id") or ""
+        hit_score = _extract_value(hit, "_score")
+        if hit_score is None:
+            hit_score = _extract_value(hit, "score")
         normalized_hits.append(
             {
-                "id": hit_dict.get("_id") if hit_dict.get("_id") is not None else hit_dict.get("id"),
-                "score": hit_dict.get("_score") if hit_dict.get("_score") is not None else hit_dict.get("score"),
-                "metadata": hit_dict.get("fields") or hit_dict.get("metadata") or {},
+                "id": str(hit_id),
+                "score": hit_score,
+                "metadata": _extract_metadata(hit),
             }
         )
 

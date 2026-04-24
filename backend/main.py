@@ -51,6 +51,9 @@ class SearchResponse(BaseModel):
     query: str
     namespace: str
     top_k: int
+    answer: str
+    sources: list[str]
+    engine: str
     matches: list[SearchMatch]
 
 
@@ -104,9 +107,29 @@ def _extract_pdf_text(file_content: bytes) -> str:
 def _normalize_hit(hit: dict[str, Any]) -> SearchMatch:
     return SearchMatch(
         id=str(hit.get("_id") or hit.get("id") or ""),
-        score=hit.get("_score") or hit.get("score"),
+        score=hit.get("_score") if hit.get("_score") is not None else hit.get("score"),
         metadata=hit.get("fields") or hit.get("metadata") or {},
     )
+
+
+def _build_answer_and_sources(matches: list[SearchMatch]) -> tuple[str, list[str]]:
+    answer = "No relevant result found in the indexed documents."
+    sources: list[str] = []
+
+    for match in matches:
+        metadata = match.metadata or {}
+        source = metadata.get("source")
+        if source:
+            pages = metadata.get("pages")
+            source_entry = f"{source} (p. {pages})" if pages else str(source)
+            if source_entry not in sources:
+                sources.append(source_entry)
+
+        text = metadata.get("text")
+        if text and answer.startswith("No relevant result"):
+            answer = text
+
+    return answer, sources
 
 
 def _is_service_role_key(supabase_key: str) -> bool:
@@ -245,12 +268,17 @@ async def upload_pdf(file: UploadFile = File(...)):
 @app.post("/query", response_model=SearchResponse)
 async def ask_question(request: QueryRequest):
     try:
-        matches = search_records(request.question, request.top_k)
+        raw_matches = search_records(request.question, request.top_k)
+        matches = [_normalize_hit(match) for match in raw_matches]
+        answer, sources = _build_answer_and_sources(matches)
         return {
             "query": request.question,
             "namespace": pinecone_namespace,
             "top_k": request.top_k,
-            "matches": [_normalize_hit(match) for match in matches],
+            "answer": answer,
+            "sources": sources,
+            "engine": "search",
+            "matches": matches,
         }
     except Exception as exc:
         logger.exception("Query failed")
