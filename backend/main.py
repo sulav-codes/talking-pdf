@@ -7,7 +7,7 @@ import os
 import re
 import uuid
 from urllib.parse import quote
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI, File, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +17,7 @@ import requests
 
 from config import settings
 from db import clear_namespace, delete_records_by_upload_id, get_index_stats, pinecone_namespace, search_records, upsert_records
+from rag import query_rag, query_rag_langchain
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -39,6 +40,12 @@ app.add_middleware(
 class QueryRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
     top_k: int = Field(default=settings.TOP_K_RESULTS, ge=1, le=50)
+    engine: Literal["direct", "langchain"] = Field(default="direct")
+
+
+class CompareQueryRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=2000)
+    top_k: int = Field(default=settings.TOP_K_RESULTS, ge=1, le=50)
 
 
 class SearchMatch(BaseModel):
@@ -53,8 +60,15 @@ class SearchResponse(BaseModel):
     top_k: int
     answer: str
     sources: list[str]
-    engine: str
+    engine: Literal["direct", "langchain"]
     matches: list[SearchMatch]
+
+
+class CompareQueryResponse(BaseModel):
+    question: str
+    top_k: int
+    direct: SearchResponse
+    langchain: SearchResponse
 
 
 class UploadResponse(BaseModel):
@@ -270,19 +284,75 @@ async def ask_question(request: QueryRequest):
     try:
         raw_matches = search_records(request.question, request.top_k)
         matches = [_normalize_hit(match) for match in raw_matches]
-        answer, sources = _build_answer_and_sources(matches)
+
+        if request.engine == "langchain":
+            answer, sources = query_rag_langchain(request.question, top_k=request.top_k)
+        else:
+            answer, sources = query_rag(request.question, top_k=request.top_k)
+
+        if not answer:
+            # Keep the API resilient even when generation path returns empty output.
+            answer, fallback_sources = _build_answer_and_sources(matches)
+            if not sources:
+                sources = fallback_sources
+
         return {
             "query": request.question,
             "namespace": pinecone_namespace,
             "top_k": request.top_k,
             "answer": answer,
             "sources": sources,
-            "engine": "search",
+            "engine": request.engine,
             "matches": matches,
         }
     except Exception as exc:
         logger.exception("Query failed")
         raise HTTPException(status_code=500, detail=f"Query failed: {exc}") from exc
+
+
+@app.post("/query/compare", response_model=CompareQueryResponse)
+async def compare_query_paths(request: CompareQueryRequest):
+    try:
+        raw_matches = search_records(request.question, request.top_k)
+        matches = [_normalize_hit(match) for match in raw_matches]
+
+        direct_answer, direct_sources = query_rag(request.question, top_k=request.top_k)
+        if not direct_answer:
+            direct_answer, fallback_sources = _build_answer_and_sources(matches)
+            if not direct_sources:
+                direct_sources = fallback_sources
+
+        langchain_answer, langchain_sources = query_rag_langchain(request.question, top_k=request.top_k)
+        if not langchain_answer:
+            langchain_answer, fallback_sources = _build_answer_and_sources(matches)
+            if not langchain_sources:
+                langchain_sources = fallback_sources
+
+        return {
+            "question": request.question,
+            "top_k": request.top_k,
+            "direct": {
+                "query": request.question,
+                "namespace": pinecone_namespace,
+                "top_k": request.top_k,
+                "answer": direct_answer,
+                "sources": direct_sources,
+                "engine": "direct",
+                "matches": matches,
+            },
+            "langchain": {
+                "query": request.question,
+                "namespace": pinecone_namespace,
+                "top_k": request.top_k,
+                "answer": langchain_answer,
+                "sources": langchain_sources,
+                "engine": "langchain",
+                "matches": matches,
+            },
+        }
+    except Exception as exc:
+        logger.exception("Query comparison failed")
+        raise HTTPException(status_code=500, detail=f"Query comparison failed: {exc}") from exc
 
 
 @app.delete("/collection")

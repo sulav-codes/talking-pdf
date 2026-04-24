@@ -169,25 +169,45 @@ def query_rag_langchain(question: str, top_k: int = None) -> Tuple[str, List[str
         )
 
         prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are a helpful assistant..."), # Your prompt here
-            ("human", "Context:\n\n{context}\n\nQuestion: {question}\n\nAnswer:"),
+            (
+                "system",
+                "You are a helpful assistant that answers questions based on the provided context. "
+                "Use the context to provide accurate and detailed answers. "
+                "If the context doesn't contain relevant information, say so clearly. "
+                "Always cite which context section(s) you used in your answer."
+            ),
+            (
+                "human",
+                "Context from documents:\n\n{context}\n\n"
+                "Question: {question}\n\n"
+                "Please provide a detailed answer based on the context above."
+            ),
         ])
 
-        # This chain combines retrieval, context formatting, and the final answer generation
+        answer_chain = prompt | RunnableLambda(_invoke_groq_from_prompt)
+
         retrieval_chain = (
-            { "question": RunnablePassthrough(), "docs": retriever }
+            {
+                "question": RunnablePassthrough(),
+                "docs": retriever,
+            }
             | RunnableLambda(
                 lambda payload: {
                     "question": payload["question"],
+                    "docs": payload["docs"],
                     "context": _build_context_from_documents(payload["docs"]),
                     "sources": _extract_sources_from_documents(payload["docs"]),
-                    "docs": payload["docs"], # Pass docs through for the branch
                 }
             )
             | RunnablePassthrough.assign(
                 answer=RunnableBranch(
-                    (lambda payload: len(payload["docs"]) == 0, lambda _: "I don't have any documents to answer that question. Please upload a PDF first."),
-                    prompt | RunnableLambda(_invoke_groq_from_prompt),
+                    (
+                        lambda payload: len(payload["docs"]) == 0,
+                        RunnableLambda(
+                            lambda _: "I don't have any documents indexed yet. Please upload a PDF first."
+                        ),
+                    ),
+                    answer_chain,
                 )
             )
         )
