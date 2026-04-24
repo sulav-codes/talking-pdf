@@ -9,7 +9,8 @@ import {
   CheckCircle,
   AlertCircle,
 } from "lucide-react";
-import APIService from "@/lib/api";
+
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
 export default function FileUpload({ onUploadSuccess }) {
   const [file, setFile] = useState(null);
@@ -19,6 +20,18 @@ export default function FileUpload({ onUploadSuccess }) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStage, setUploadStage] = useState(""); // "uploading", "processing", "indexing"
   const fileInputRef = useRef(null);
+
+  const validateFileSize = (candidateFile) => {
+    if (candidateFile.size > MAX_FILE_SIZE_BYTES) {
+      setUploadStatus({
+        type: "error",
+        message: "File is too large. Please upload a PDF up to 5MB.",
+      });
+      return false;
+    }
+
+    return true;
+  };
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -37,6 +50,9 @@ export default function FileUpload({ onUploadSuccess }) {
 
     const droppedFile = e.dataTransfer.files[0];
     if (droppedFile && droppedFile.type === "application/pdf") {
+      if (!validateFileSize(droppedFile)) {
+        return;
+      }
       setFile(droppedFile);
       setUploadStatus(null);
     }
@@ -45,6 +61,12 @@ export default function FileUpload({ onUploadSuccess }) {
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
+      if (!validateFileSize(selectedFile)) {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+        return;
+      }
       setFile(selectedFile);
       setUploadStatus(null);
     }
@@ -52,6 +74,10 @@ export default function FileUpload({ onUploadSuccess }) {
 
   const handleUpload = async () => {
     if (!file) return;
+
+    if (!validateFileSize(file)) {
+      return;
+    }
 
     setUploading(true);
     setUploadStatus(null);
@@ -106,7 +132,7 @@ export default function FileUpload({ onUploadSuccess }) {
         xhr.open(
           "POST",
           (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000") +
-            "/upload"
+            "/upload",
         );
         xhr.send(formData);
       });
@@ -183,14 +209,14 @@ export default function FileUpload({ onUploadSuccess }) {
               or drag and drop
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-500">
-              PDF files only (max 10MB)
+              PDF files only (max 5MB)
             </p>
           </label>
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
               <div className="flex items-center space-x-3 flex-1 min-w-0">
-                <File className="w-8 h-8 text-blue-500 flex-shrink-0" />
+                <File className="w-8 h-8 text-blue-500 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                     {file.name}
@@ -241,8 +267,8 @@ export default function FileUpload({ onUploadSuccess }) {
                       uploadStage === "uploading"
                         ? "bg-blue-600"
                         : uploadStage === "processing"
-                        ? "bg-yellow-500"
-                        : "bg-green-500"
+                          ? "bg-yellow-500"
+                          : "bg-green-500"
                     }`}
                     style={{
                       width:
@@ -253,7 +279,7 @@ export default function FileUpload({ onUploadSuccess }) {
                   >
                     {(uploadStage === "processing" ||
                       uploadStage === "indexing") && (
-                      <div className="h-full w-full bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+                      <div className="h-full w-full bg-linear-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
                     )}
                   </div>
                 </div>
@@ -279,9 +305,9 @@ export default function FileUpload({ onUploadSuccess }) {
             }`}
           >
             {uploadStatus.type === "success" ? (
-              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0 mt-0.5" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
             )}
             <p
               className={`text-sm ${

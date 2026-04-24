@@ -25,7 +25,7 @@ class Settings:
     SUPABASE_BUCKET: str = os.getenv("SUPABASE_BUCKET", "")
     SUPABASE_UPLOAD_PREFIX: str = os.getenv("SUPABASE_UPLOAD_PREFIX", "pdfs")
 
-    MAX_FILE_SIZE: int = 10 * 1024 * 1024
+    MAX_FILE_SIZE: int = 5 * 1024 * 1024
     ALLOWED_EXTENSIONS: set[str] = {".pdf"}
     CHUNK_WORDS: int = int(os.getenv("CHUNK_WORDS", "500"))
     CHUNK_OVERLAP_WORDS: int = int(os.getenv("CHUNK_OVERLAP_WORDS", "50"))
