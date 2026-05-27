@@ -73,16 +73,28 @@ def get_index_stats() -> dict:
     # Return lightweight index stats for health checks.
     stats = _to_dict(pinecone_index.describe_index_stats())
     namespaces = stats.get("namespaces", {}) if isinstance(stats, dict) else {}
-    namespace_stats = namespaces.get(pinecone_namespace, {}) if isinstance(namespaces, dict) else {}
+
+    def _get_vector_count(value: Any) -> int:
+        if isinstance(value, dict):
+            return value.get("vector_count", value.get("vectorCount", 0)) or 0
+        return 0
+
     namespace_vector_count = 0
-    if isinstance(namespace_stats, dict):
-        namespace_vector_count = namespace_stats.get("vector_count", 0)
+    if isinstance(namespaces, dict) and namespaces:
+        if pinecone_namespace in namespaces:
+            namespace_vector_count = _get_vector_count(namespaces[pinecone_namespace])
+        elif "" in namespaces:
+            namespace_vector_count = _get_vector_count(namespaces[""])
+        elif len(namespaces) == 1:
+            namespace_vector_count = _get_vector_count(next(iter(namespaces.values())))
+
+    total_vector_count = stats.get("total_vector_count", stats.get("totalVectorCount", 0))
 
     return {
         "name": settings.PINECONE_INDEX_NAME or settings.PINECONE_INDEX_HOST,
         "namespace": pinecone_namespace,
-        "vector_count": namespace_vector_count or stats.get("total_vector_count", 0),
-        "total_vector_count": stats.get("total_vector_count", 0),
+        "vector_count": namespace_vector_count or total_vector_count,
+        "total_vector_count": total_vector_count,
         "dimension": stats.get("dimension", 0),
         "index_fullness": stats.get("index_fullness", 0.0),
     }
