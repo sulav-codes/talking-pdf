@@ -29,11 +29,13 @@ class PineconeRetriever(BaseRetriever):
 
     index: Any = Field(...)
     default_k: int = Field(default=settings.TOP_K_RESULTS)
+    upload_id: str | None = Field(default=None)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def _get_relevant_documents(self, query: str, *, run_manager: Any = None) -> List[Document]:
-        results = search_records(query, self.default_k)
+        filters = {"upload_id": {"$eq": self.upload_id}} if self.upload_id else None
+        results = search_records(query, self.default_k, filters=filters)
 
         relevant_docs: List[Document] = []
         for match in results:
@@ -161,7 +163,11 @@ def index_pdf(file_stream: io.BytesIO, filename: str) -> int:
         raise
 
 
-def query_rag_langchain(question: str, top_k: int = None) -> Tuple[str, List[str]]:
+def query_rag_langchain(
+    question: str,
+    top_k: int | None = None,
+    upload_id: str | None = None,
+) -> Tuple[str, List[str]]:
     """
     Queries the RAG system using the Pinecone retriever with serverless embeddings.
     """
@@ -172,7 +178,8 @@ def query_rag_langchain(question: str, top_k: int = None) -> Tuple[str, List[str
         # Use our new PineconeRetriever (uses Pinecone's serverless embeddings)
         retriever = PineconeRetriever(
             index=pinecone_index,
-            default_k=k
+            default_k=k,
+            upload_id=upload_id,
         )
 
         prompt = ChatPromptTemplate.from_messages([

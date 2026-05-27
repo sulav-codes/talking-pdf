@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Send, Loader2, FileText } from "lucide-react";
 import APIService from "@/lib/api";
 
@@ -69,10 +69,16 @@ function renderAssistantContent(content) {
   return <div className="space-y-2">{nodes}</div>;
 }
 
-export default function ChatInterface({ disabled }) {
+export default function ChatInterface({ disabled, documentName, uploadId }) {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const isReady = Boolean(uploadId) && !disabled;
+
+  useEffect(() => {
+    setMessages([]);
+    setQuestion("");
+  }, [uploadId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -84,7 +90,7 @@ export default function ChatInterface({ disabled }) {
     setLoading(true);
 
     try {
-      const data = await APIService.query(question);
+      const data = await APIService.query(question, 4, "direct", uploadId);
       const assistantMessage = {
         role: "assistant",
         content: data.answer || "No answer returned from the backend.",
@@ -106,6 +112,17 @@ export default function ChatInterface({ disabled }) {
     <div className="flex flex-col h-full">
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-900/40 px-4 py-3">
+          <div className="flex items-center space-x-2">
+            <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Active document
+            </span>
+          </div>
+          <span className="text-sm text-gray-700 dark:text-gray-300">
+            {documentName || "No document selected"}
+          </span>
+        </div>
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/20 rounded-full flex items-center justify-center mb-4">
@@ -115,7 +132,9 @@ export default function ChatInterface({ disabled }) {
               No messages yet
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 max-w-sm">
-              Upload a PDF and start asking questions about your documents
+              {documentName
+                ? `Ask questions about ${documentName}`
+                : "Upload a PDF and start asking questions about your documents"}
             </p>
           </div>
         ) : (
@@ -197,16 +216,16 @@ export default function ChatInterface({ disabled }) {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder={
-              disabled
+              !isReady
                 ? "Upload a PDF first..."
                 : "Ask a question about your documents..."
             }
-            disabled={disabled || loading}
+            disabled={!isReady || loading}
             className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-900 disabled:cursor-not-allowed"
           />
           <button
             type="submit"
-            disabled={disabled || loading || !question.trim()}
+            disabled={!isReady || loading || !question.trim()}
             className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded-lg font-medium transition-colors flex items-center space-x-2 disabled:cursor-not-allowed"
           >
             {loading ? (

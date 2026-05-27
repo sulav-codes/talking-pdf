@@ -20,11 +20,6 @@ class Settings:
     PINECONE_TEXT_FIELD: str = os.getenv("PINECONE_TEXT_FIELD", "text")
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
 
-    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
-    SUPABASE_SERVICE_KEY: str = os.getenv("SUPABASE_SERVICE_KEY", "")
-    SUPABASE_BUCKET: str = os.getenv("SUPABASE_BUCKET", "")
-    SUPABASE_UPLOAD_PREFIX: str = os.getenv("SUPABASE_UPLOAD_PREFIX", "pdfs")
-
     MAX_FILE_SIZE: int = 5 * 1024 * 1024
     ALLOWED_EXTENSIONS: set[str] = {".pdf"}
     CHUNK_WORDS: int = int(os.getenv("CHUNK_WORDS", "500"))

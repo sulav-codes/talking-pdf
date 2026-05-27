@@ -11,7 +11,7 @@ A modern, full-stack RAG (Retrieval Augmented Generation) application that lets 
 - 📤 **PDF Upload & Processing**: Upload PDF files and automatically extract and index content
 - 🤖 **AI-Powered Chat**: Ask questions in natural language and get accurate, context-aware answers
 - 🔍 **Semantic Search**: Advanced vector-based search using OpenAI embeddings
-- 💾 **Persistent Storage**: Documents are indexed once and stored persistently using ChromaDB
+- 💾 **Persistent Storage**: Documents are indexed once and stored persistently using Pinecone
 - 🎨 **Modern UI**: Clean, responsive interface with dark mode support
 - ⚡ **Fast & Free**: Optimized for speed with cost-effective AI models
 - 🔒 **Privacy-First**: Process documents locally with secure API integration
@@ -22,8 +22,8 @@ A modern, full-stack RAG (Retrieval Augmented Generation) application that lets 
 ### Backend
 
 - **FastAPI**: High-performance async web framework
-- **ChromaDB**: Vector database for embeddings storage
-- **OpenAI API**: GPT-4o-mini for chat, text-embedding-3-small for embeddings
+- **Pinecone**: Vector database for embeddings(llama-text-embed-v2) and storage
+- **Groq API**: llama-3.1-8b-instant model for chat
 - **PyPDF2**: PDF text extraction
 - **Pydantic**: Request/response validation
 
@@ -63,9 +63,16 @@ A modern, full-stack RAG (Retrieval Augmented Generation) application that lets 
    Create a `.env` file in the `backend` directory:
 
    ```env
-   OPENAI_API_KEY=your_openai_api_key_here
-   CHROMA_PERSIST_DIR=./chroma_db
-   UPLOAD_DIR=./uploads
+   HOST=localhost
+   PORT=8000
+   GrOQ_API_KEY=your_groq_api_key
+   PINECONE_INDEX_HOST=your_pinecone_index_host
+   PINECONE_API_KEY=your_pinecone_api_key
+   PINECONE_INDEX_NAME=your_pinecone_index_name
+   PINECONE_NAMESPACE=default
+   PINECONE_EMBEDDING_MODEL=llama-text-embed-v2
+   PINECONE_TEXT_FIELD=chunk_text
+   CORS_ORIGINS=http://localhost:3000 # Add frontend URL for CORS
    ```
 
 4. **Set up the Frontend**
@@ -97,13 +104,11 @@ A modern, full-stack RAG (Retrieval Augmented Generation) application that lets 
 ## 📖 Usage
 
 1. **Upload a PDF**
-
    - Click on the "Upload PDF" tab
    - Select a PDF file from your computer
    - Wait for the file to be processed and indexed
 
 2. **Start Chatting**
-
    - Switch to the "Chat" tab
    - Type your question about the document
    - Get AI-powered answers with source references
@@ -135,8 +140,6 @@ talking-pdf/
 │   ├── config.py            # Configuration settings
 │   ├── utils.py             # Utility functions
 │   ├── requirements.txt     # Python dependencies
-│   ├── chroma_db/           # ChromaDB persistent storage
-│   └── uploads/             # Uploaded PDF files
 │
 └── frontend/
     ├── src/
@@ -162,8 +165,13 @@ talking-pdf/
 
 Key settings:
 
-- `OPENAI_API_KEY`: Your OpenAI API key
-- `CHROMA_PERSIST_DIR`: ChromaDB storage directory
+- `GROQ_API_KEY`: API key for Groq API
+- `PINECONE_INDEX_HOST`: Pinecone index host URL
+- `PINECONE_API_KEY`: Pinecone API key
+- `PINECONE_INDEX_NAME`: Pinecone index name
+- `PINECONE_NAMESPACE`: Pinecone namespace
+- `PINECONE_EMBEDDING_MODEL`: Pinecone embedding model
+- `PINECONE_TEXT_FIELD`: Pinecone text field
 - `CHUNK_SIZE`: Text chunk size for embeddings (default: 1000)
 - `CHUNK_OVERLAP`: Overlap between chunks (default: 200)
 - `DEFAULT_TOP_K`: Number of context chunks to retrieve (default: 4)

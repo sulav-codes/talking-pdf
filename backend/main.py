@@ -37,6 +37,7 @@ class QueryRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
     top_k: int = Field(default=settings.TOP_K_RESULTS, ge=1, le=50)
     engine: Literal["direct", "langchain"] = Field(default="direct")
+    upload_id: str | None = Field(default=None)
 
 
 class CompareQueryRequest(BaseModel):
@@ -72,6 +73,7 @@ class UploadResponse(BaseModel):
     filename: str
     chunks_indexed: int
     namespace: str
+    upload_id: str
 
 
 class IndexHealthResponse(BaseModel):
@@ -244,16 +246,22 @@ async def upload_pdf(file: UploadFile = File(...)):
         "filename": file.filename,
         "chunks_indexed": total_chunks,
         "namespace": pinecone_namespace,
+        "upload_id": upload_id,
     }
 
 
 @app.post("/query", response_model=SearchResponse)
 async def ask_question(request: QueryRequest):
     try:
-        raw_matches = search_records(request.question, request.top_k)
+        filters = {"upload_id": {"$eq": request.upload_id}} if request.upload_id else None
+        raw_matches = search_records(request.question, request.top_k, filters=filters)
         matches = [_normalize_hit(match) for match in raw_matches]
 
-        answer, sources = query_rag_langchain(request.question, top_k=request.top_k)
+        answer, sources = query_rag_langchain(
+            request.question,
+            top_k=request.top_k,
+            upload_id=request.upload_id,
+        )
 
         if not answer:
             # Keep the API resilient even when generation path returns empty output.

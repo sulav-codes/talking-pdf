@@ -10,12 +10,15 @@ import FeatureCards from "@/components/FeatureCards";
 import Image from "next/image";
 
 export default function Home() {
-  const [hasDocuments, setHasDocuments] = useState(false);
+  const [activeDocument, setActiveDocument] = useState(null);
   const [activeTab, setActiveTab] = useState("upload");
 
   const handleUploadSuccess = (data) => {
     if (data.chunks_indexed > 0) {
-      setHasDocuments(true);
+      setActiveDocument({
+        filename: data.filename,
+        uploadId: data.upload_id,
+      });
       setActiveTab("chat");
     }
   };
@@ -101,7 +104,11 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="h-150">
-                    <ChatInterface disabled={!hasDocuments} />
+                    <ChatInterface
+                      disabled={!activeDocument}
+                      documentName={activeDocument?.filename}
+                      uploadId={activeDocument?.uploadId}
+                    />
                   </div>
                 )}
               </div>
@@ -121,9 +128,6 @@ export default function Home() {
                   </li>
                   <li>
                     • <strong>Groq Llama 3.1</strong> - Ultra-fast LLM (FREE)
-                  </li>
-                  <li>
-                    • <strong>Supabase Bucket</strong> - PDF storage (FREE)
                   </li>
                 </ul>
               </div>

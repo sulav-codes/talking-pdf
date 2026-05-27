@@ -76,14 +76,19 @@ class APIService {
   /**
    * Query the RAG system
    */
-  static async query(question, topK = 4, engine = "direct") {
+  static async query(question, topK = 4, engine = "direct", uploadId) {
     try {
+      const payload = { question, top_k: topK, engine };
+      if (uploadId) {
+        payload.upload_id = uploadId;
+      }
+
       const response = await fetch(`${API_BASE_URL}/query`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ question, top_k: topK, engine }),
+        body: JSON.stringify(payload),
       });
 
       return await this.handleResponse(response);

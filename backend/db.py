@@ -110,12 +110,18 @@ def delete_records_by_upload_id(upload_id: str, namespace: str | None = None) ->
         raise
 
 
-def search_records(query_text: str, top_k: int, namespace: str | None = None) -> list[dict]:
-    #Semantic search using Pinecone hosted embeddings.
+def search_records(
+    query_text: str,
+    top_k: int,
+    namespace: str | None = None,
+    filters: dict[str, Any] | None = None,
+) -> list[dict]:
+    # Semantic search using Pinecone hosted embeddings.
     target_namespace = namespace or pinecone_namespace
     response = pinecone_index.search(
         namespace=target_namespace,
         query={"inputs": {"text": query_text}, "top_k": top_k},
+        filter=filters or None,
     )
 
     hits = _extract_hits(response)
