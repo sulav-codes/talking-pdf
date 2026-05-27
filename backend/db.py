@@ -72,10 +72,17 @@ def _extract_metadata(item: Any) -> dict[str, Any]:
 def get_index_stats() -> dict:
     # Return lightweight index stats for health checks.
     stats = _to_dict(pinecone_index.describe_index_stats())
+    namespaces = stats.get("namespaces", {}) if isinstance(stats, dict) else {}
+    namespace_stats = namespaces.get(pinecone_namespace, {}) if isinstance(namespaces, dict) else {}
+    namespace_vector_count = 0
+    if isinstance(namespace_stats, dict):
+        namespace_vector_count = namespace_stats.get("vector_count", 0)
+
     return {
         "name": settings.PINECONE_INDEX_NAME or settings.PINECONE_INDEX_HOST,
         "namespace": pinecone_namespace,
-        "vector_count": stats.get("total_vector_count", 0),
+        "vector_count": namespace_vector_count or stats.get("total_vector_count", 0),
+        "total_vector_count": stats.get("total_vector_count", 0),
         "dimension": stats.get("dimension", 0),
         "index_fullness": stats.get("index_fullness", 0.0),
     }

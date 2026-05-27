@@ -10,30 +10,40 @@ import FeatureCards from "@/components/FeatureCards";
 import Image from "next/image";
 
 export default function Home() {
-  const [activeDocument, setActiveDocument] = useState(null);
-  const [activeTab, setActiveTab] = useState("upload");
   const activeDocumentKey = "talking-pdf-active-document";
   const activeTabKey = "talking-pdf-active-tab";
   const uploadIdsKey = "talking-pdf-upload-ids";
+  const [activeDocument, setActiveDocument] = useState(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
 
-  useEffect(() => {
     const storedDocument = window.localStorage.getItem(activeDocumentKey);
-    if (storedDocument) {
-      try {
-        const parsed = JSON.parse(storedDocument);
-        if (parsed?.filename && parsed?.uploadId) {
-          setActiveDocument(parsed);
-        }
-      } catch (error) {
-        console.warn("Failed to restore active document", error);
+    if (!storedDocument) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(storedDocument);
+      if (parsed?.filename && parsed?.uploadId) {
+        return parsed;
       }
+    } catch (error) {
+      console.warn("Failed to restore active document", error);
+    }
+
+    return null;
+  });
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window === "undefined") {
+      return "upload";
     }
 
     const storedTab = window.localStorage.getItem(activeTabKey);
-    if (storedTab === "upload" || storedTab === "chat") {
-      setActiveTab(storedTab);
-    }
-  }, []);
+    return storedTab === "upload" || storedTab === "chat"
+      ? storedTab
+      : "upload";
+  });
 
   useEffect(() => {
     if (activeDocument) {
