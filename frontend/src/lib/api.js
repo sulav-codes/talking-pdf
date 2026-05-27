@@ -154,6 +154,21 @@ class APIService {
       this.handleNetworkError(error);
     }
   }
+
+  /**
+   * Delete a single upload by upload_id
+   */
+  static async deleteUpload(uploadId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/uploads/${uploadId}`, {
+        method: "DELETE",
+      });
+
+      return await this.handleResponse(response);
+    } catch (error) {
+      this.handleNetworkError(error);
+    }
+  }
 }
 
 export default APIService;

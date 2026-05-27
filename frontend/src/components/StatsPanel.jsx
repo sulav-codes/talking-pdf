@@ -4,11 +4,13 @@ import { Database, FileText, Trash2, Loader2, AlertCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import APIService from "@/lib/api";
 
-export default function StatsPanel() {
+export default function StatsPanel({ activeDocument, onClearActiveDocument }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
   const [error, setError] = useState(null);
+  const uploadIdsKey = "talking-pdf-upload-ids";
+  const activeDocumentKey = "talking-pdf-active-document";
 
   const fetchStats = async () => {
     try {
@@ -26,7 +28,7 @@ export default function StatsPanel() {
   const handleClear = async () => {
     if (
       !confirm(
-        "Are you sure you want to clear all documents? This action cannot be undone."
+        "Are you sure you want to clear all documents? This action cannot be undone.",
       )
     ) {
       return;
@@ -35,7 +37,22 @@ export default function StatsPanel() {
     setClearing(true);
     try {
       setError(null);
-      await APIService.clearCollection();
+      const storedIds = window.localStorage.getItem(uploadIdsKey);
+      const parsedIds = storedIds ? JSON.parse(storedIds) : [];
+      const uploadIds = Array.isArray(parsedIds) ? parsedIds : [];
+
+      await Promise.all(
+        uploadIds.map((uploadId) => APIService.deleteUpload(uploadId)),
+      );
+
+      uploadIds.forEach((uploadId) => {
+        window.localStorage.removeItem(`talking-pdf-chat:${uploadId}`);
+      });
+      window.localStorage.removeItem(uploadIdsKey);
+      window.localStorage.removeItem(activeDocumentKey);
+      if (onClearActiveDocument) {
+        onClearActiveDocument();
+      }
       await fetchStats();
     } catch (error) {
       console.error("Failed to clear collection:", error);
@@ -94,7 +111,7 @@ export default function StatsPanel() {
         </h2>
         <button
           onClick={handleClear}
-          disabled={clearing || stats?.document_count === 0}
+          disabled={clearing || stats?.vector_count === 0}
           className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded-md font-medium transition-colors flex items-center space-x-1.5 disabled:cursor-not-allowed"
         >
           {clearing ? (
@@ -122,7 +139,7 @@ export default function StatsPanel() {
                 Total Chunks
               </p>
               <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {stats?.document_count || 0}
+                {stats?.vector_count || 0}
               </p>
             </div>
           </div>
@@ -130,10 +147,10 @@ export default function StatsPanel() {
 
         <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
           <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-            Collection Name
+            Active Document
           </p>
-          <p className="text-sm font-mono text-gray-900 dark:text-gray-100">
-            {stats?.name}
+          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+            {activeDocument?.filename || "No document selected"}
           </p>
         </div>
 

@@ -74,11 +74,38 @@ export default function ChatInterface({ disabled, documentName, uploadId }) {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const isReady = Boolean(uploadId) && !disabled;
+  const storageKey = uploadId ? `talking-pdf-chat:${uploadId}` : null;
 
   useEffect(() => {
-    setMessages([]);
+    if (!storageKey) {
+      setMessages([]);
+      setQuestion("");
+      return;
+    }
+
+    const storedMessages = window.localStorage.getItem(storageKey);
+    if (storedMessages) {
+      try {
+        const parsed = JSON.parse(storedMessages);
+        setMessages(Array.isArray(parsed) ? parsed : []);
+      } catch (error) {
+        console.warn("Failed to restore chat history", error);
+        setMessages([]);
+      }
+    } else {
+      setMessages([]);
+    }
+
     setQuestion("");
   }, [uploadId]);
+
+  useEffect(() => {
+    if (!storageKey) {
+      return;
+    }
+
+    window.localStorage.setItem(storageKey, JSON.stringify(messages));
+  }, [messages, storageKey]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -112,17 +139,6 @@ export default function ChatInterface({ disabled, documentName, uploadId }) {
     <div className="flex flex-col h-full">
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
-        <div className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-900/40 px-4 py-3">
-          <div className="flex items-center space-x-2">
-            <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-              Active document
-            </span>
-          </div>
-          <span className="text-sm text-gray-700 dark:text-gray-300">
-            {documentName || "No document selected"}
-          </span>
-        </div>
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/20 rounded-full flex items-center justify-center mb-4">

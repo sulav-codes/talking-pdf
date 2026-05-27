@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FileText, MessageSquare } from "lucide-react";
 import FileUpload from "@/components/FileUpload";
 import ChatInterface from "@/components/ChatInterface";
@@ -12,6 +12,61 @@ import Image from "next/image";
 export default function Home() {
   const [activeDocument, setActiveDocument] = useState(null);
   const [activeTab, setActiveTab] = useState("upload");
+  const activeDocumentKey = "talking-pdf-active-document";
+  const activeTabKey = "talking-pdf-active-tab";
+  const uploadIdsKey = "talking-pdf-upload-ids";
+
+  useEffect(() => {
+    const storedDocument = window.localStorage.getItem(activeDocumentKey);
+    if (storedDocument) {
+      try {
+        const parsed = JSON.parse(storedDocument);
+        if (parsed?.filename && parsed?.uploadId) {
+          setActiveDocument(parsed);
+        }
+      } catch (error) {
+        console.warn("Failed to restore active document", error);
+      }
+    }
+
+    const storedTab = window.localStorage.getItem(activeTabKey);
+    if (storedTab === "upload" || storedTab === "chat") {
+      setActiveTab(storedTab);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeDocument) {
+      window.localStorage.setItem(
+        activeDocumentKey,
+        JSON.stringify(activeDocument),
+      );
+    } else {
+      window.localStorage.removeItem(activeDocumentKey);
+    }
+  }, [activeDocument]);
+
+  useEffect(() => {
+    if (!activeDocument?.uploadId) {
+      return;
+    }
+
+    try {
+      const storedIds = window.localStorage.getItem(uploadIdsKey);
+      const parsedIds = storedIds ? JSON.parse(storedIds) : [];
+      const uploadIds = Array.isArray(parsedIds) ? parsedIds : [];
+      if (!uploadIds.includes(activeDocument.uploadId)) {
+        uploadIds.push(activeDocument.uploadId);
+        window.localStorage.setItem(uploadIdsKey, JSON.stringify(uploadIds));
+      }
+    } catch (error) {
+      console.warn("Failed to reconcile upload ids", error);
+    }
+  }, [activeDocument]);
+
+  useEffect(() => {
+    window.localStorage.setItem(activeTabKey, activeTab);
+  }, [activeTab]);
 
   const handleUploadSuccess = (data) => {
     if (data.chunks_indexed > 0) {
@@ -20,6 +75,18 @@ export default function Home() {
         uploadId: data.upload_id,
       });
       setActiveTab("chat");
+
+      try {
+        const storedIds = window.localStorage.getItem(uploadIdsKey);
+        const parsedIds = storedIds ? JSON.parse(storedIds) : [];
+        const uploadIds = Array.isArray(parsedIds) ? parsedIds : [];
+        if (!uploadIds.includes(data.upload_id)) {
+          uploadIds.push(data.upload_id);
+          window.localStorage.setItem(uploadIdsKey, JSON.stringify(uploadIds));
+        }
+      } catch (error) {
+        console.warn("Failed to persist upload id", error);
+      }
     }
   };
 
@@ -99,7 +166,10 @@ export default function Home() {
                       lightning-fast LLM responses.
                     </p>
                   </div>
-                  <FileUpload onUploadSuccess={handleUploadSuccess} />
+                  <FileUpload
+                    onUploadSuccess={handleUploadSuccess}
+                    lastUploaded={activeDocument}
+                  />
                 </div>
                 <div className={activeTab === "chat" ? "block" : "hidden"}>
                   <div className="h-150">
@@ -147,7 +217,10 @@ export default function Home() {
 
           {/* Sidebar */}
           <div className="lg:col-span-1">
-            <StatsPanel />
+            <StatsPanel
+              activeDocument={activeDocument}
+              onClearActiveDocument={() => setActiveDocument(null)}
+            />
           </div>
         </div>
       </main>

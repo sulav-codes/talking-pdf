@@ -283,6 +283,20 @@ async def ask_question(request: QueryRequest):
         raise HTTPException(status_code=500, detail=f"Query failed: {exc}") from exc
 
 
+@app.delete("/uploads/{upload_id}")
+async def delete_upload(upload_id: str):
+    try:
+        delete_records_by_upload_id(upload_id)
+        return {
+            "message": "Upload deleted successfully",
+            "upload_id": upload_id,
+            "namespace": pinecone_namespace,
+        }
+    except Exception as exc:
+        logger.exception("Failed to delete upload %s", upload_id)
+        raise HTTPException(status_code=500, detail=f"Failed to delete upload: {exc}") from exc
+
+
 @app.delete("/collection")
 async def clear_pinecone_index():
     try:

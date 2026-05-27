@@ -12,7 +12,7 @@ import {
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
-export default function FileUpload({ onUploadSuccess }) {
+export default function FileUpload({ onUploadSuccess, lastUploaded }) {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
@@ -192,21 +192,41 @@ export default function FileUpload({ onUploadSuccess }) {
         />
 
         {!file ? (
-          <label
-            htmlFor="file-upload"
-            className="flex flex-col items-center justify-center cursor-pointer"
-          >
-            <Upload className="w-12 h-12 text-gray-400 mb-3" />
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-              <span className="font-semibold text-blue-600 dark:text-blue-400">
-                Click to upload
-              </span>{" "}
-              or drag and drop
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-500">
-              PDF files only (max 5MB)
-            </p>
-          </label>
+          <div className="space-y-4">
+            <label
+              htmlFor="file-upload"
+              className="flex flex-col items-center justify-center cursor-pointer"
+            >
+              <Upload className="w-12 h-12 text-gray-400 mb-3" />
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                <span className="font-semibold text-blue-600 dark:text-blue-400">
+                  Click to upload
+                </span>{" "}
+                or drag and drop
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-500">
+                PDF files only (max 5MB)
+              </p>
+            </label>
+            {lastUploaded?.filename && (
+              <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="flex items-center space-x-3 flex-1 min-w-0">
+                  <File className="w-8 h-8 text-blue-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Last uploaded
+                    </p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      {lastUploaded.filename}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                  Active
+                </span>
+              </div>
+            )}
+          </div>
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
