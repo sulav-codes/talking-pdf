@@ -149,13 +149,8 @@ export default function FileUpload({ onUploadSuccess }) {
         onUploadSuccess(data);
       }
 
-      // Clear file after successful upload
-      setTimeout(() => {
-        setFile(null);
-        setUploadStatus(null);
-        setUploadProgress(0);
-        setUploadStage("");
-      }, 3000);
+      setUploadProgress(100);
+      setUploadStage("indexing");
     } catch (error) {
       setUploadStatus({
         type: "error",

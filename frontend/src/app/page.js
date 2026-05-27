@@ -88,21 +88,20 @@ export default function Home() {
 
               {/* Tab Content */}
               <div className="p-6">
-                {activeTab === "upload" ? (
-                  <div>
-                    <div className="mb-6">
-                      <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                        Upload Your Documents
-                      </h2>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Upload PDF files to start asking questions. Your
-                        documents are processed locally with free embeddings and
-                        lightning-fast LLM responses.
-                      </p>
-                    </div>
-                    <FileUpload onUploadSuccess={handleUploadSuccess} />
+                <div className={activeTab === "upload" ? "block" : "hidden"}>
+                  <div className="mb-6">
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                      Upload Your Documents
+                    </h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Upload PDF files to start asking questions. Your documents
+                      are processed locally with free embeddings and
+                      lightning-fast LLM responses.
+                    </p>
                   </div>
-                ) : (
+                  <FileUpload onUploadSuccess={handleUploadSuccess} />
+                </div>
+                <div className={activeTab === "chat" ? "block" : "hidden"}>
                   <div className="h-150">
                     <ChatInterface
                       disabled={!activeDocument}
@@ -110,7 +109,7 @@ export default function Home() {
                       uploadId={activeDocument?.uploadId}
                     />
                   </div>
-                )}
+                </div>
               </div>
             </div>
 

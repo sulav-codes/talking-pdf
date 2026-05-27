@@ -118,10 +118,13 @@ def search_records(
 ) -> list[dict]:
     # Semantic search using Pinecone hosted embeddings.
     target_namespace = namespace or pinecone_namespace
+    query_payload = {"inputs": {"text": query_text}, "top_k": top_k}
+    if filters:
+        query_payload["filter"] = filters
+
     response = pinecone_index.search(
         namespace=target_namespace,
-        query={"inputs": {"text": query_text}, "top_k": top_k},
-        filter=filters or None,
+        query=query_payload,
     )
 
     hits = _extract_hits(response)
