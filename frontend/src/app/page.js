@@ -244,7 +244,7 @@ export default function Home() {
             Next.js • FastAPI • Pinecone • Groq LLM • HuggingFace • Supabase
             Bucket • Deployed on Vercel & Render.
             <br />
-            <br />© 2026 Talking PDF. All rights reserved.
+            <br />© {new Date().getFullYear()} Talking PDF. All rights reserved.
           </p>
         </div>
       </footer>

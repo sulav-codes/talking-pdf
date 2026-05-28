@@ -12,10 +12,21 @@ export default function StatsPanel({ activeDocument, onClearActiveDocument }) {
   const uploadIdsKey = "talking-pdf-upload-ids";
   const activeDocumentKey = "talking-pdf-active-document";
 
+  const loadUploadIds = () => {
+    if (typeof window === "undefined") {
+      return [];
+    }
+
+    const storedIds = window.localStorage.getItem(uploadIdsKey);
+    const parsedIds = storedIds ? JSON.parse(storedIds) : [];
+    return Array.isArray(parsedIds) ? parsedIds : [];
+  };
+
   const fetchStats = async () => {
     try {
       setError(null);
-      const data = await APIService.getStats();
+      const uploadIds = loadUploadIds();
+      const data = await APIService.getStats(uploadIds);
       setStats(data);
     } catch (error) {
       console.error("Failed to fetch stats:", error);
@@ -37,9 +48,7 @@ export default function StatsPanel({ activeDocument, onClearActiveDocument }) {
     setClearing(true);
     try {
       setError(null);
-      const storedIds = window.localStorage.getItem(uploadIdsKey);
-      const parsedIds = storedIds ? JSON.parse(storedIds) : [];
-      const uploadIds = Array.isArray(parsedIds) ? parsedIds : [];
+      const uploadIds = loadUploadIds();
 
       await Promise.all(
         uploadIds.map((uploadId) => APIService.deleteUpload(uploadId)),
@@ -102,6 +111,8 @@ export default function StatsPanel({ activeDocument, onClearActiveDocument }) {
     );
   }
 
+  const totalChunks = stats?.upload_total_chunks ?? stats?.vector_count ?? 0;
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex items-center justify-between mb-6">
@@ -111,7 +122,7 @@ export default function StatsPanel({ activeDocument, onClearActiveDocument }) {
         </h2>
         <button
           onClick={handleClear}
-          disabled={clearing || stats?.vector_count === 0}
+          disabled={clearing || totalChunks === 0}
           className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded-md font-medium transition-colors flex items-center space-x-1.5 disabled:cursor-not-allowed"
         >
           {clearing ? (
@@ -139,7 +150,7 @@ export default function StatsPanel({ activeDocument, onClearActiveDocument }) {
                 Total Chunks
               </p>
               <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {stats?.vector_count || 0}
+                {totalChunks}
               </p>
             </div>
           </div>

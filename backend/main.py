@@ -6,13 +6,13 @@ import re
 import uuid
 from typing import Any, Literal
 
-from fastapi import FastAPI, File, HTTPException, Response, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from PyPDF2 import PdfReader
 
 from config import settings
-from db import clear_namespace, delete_records_by_upload_id, get_index_stats, pinecone_namespace, search_records, upsert_records
+from db import clear_namespace, delete_records_by_upload_id, get_index_stats, get_upload_chunk_total, pinecone_namespace, search_records, upsert_records
 from rag import query_rag_langchain
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -308,9 +308,13 @@ async def clear_pinecone_index():
 
 
 @app.get("/stats")
-async def get_index_statistics():
+async def get_index_statistics(upload_ids: str | None = Query(default=None)):
     try:
-        return get_index_stats()
+        stats = get_index_stats()
+        if upload_ids:
+            upload_id_list = [item.strip() for item in upload_ids.split(",") if item.strip()]
+            stats["upload_total_chunks"] = get_upload_chunk_total(upload_id_list)
+        return stats
     except Exception as exc:
         logger.exception("Failed to get stats")
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {exc}") from exc

@@ -69,6 +69,13 @@ def _extract_metadata(item: Any) -> dict[str, Any]:
     return _to_dict(metadata)
 
 
+def _coerce_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 def get_index_stats() -> dict:
     # Return lightweight index stats for health checks.
     stats = _to_dict(pinecone_index.describe_index_stats())
@@ -98,6 +105,30 @@ def get_index_stats() -> dict:
         "dimension": stats.get("dimension", 0),
         "index_fullness": stats.get("index_fullness", 0.0),
     }
+
+
+def get_upload_chunk_total(upload_ids: list[str], namespace: str | None = None) -> int:
+    if not upload_ids:
+        return 0
+
+    target_namespace = namespace or pinecone_namespace
+    record_ids = [f"{upload_id}-0" for upload_id in upload_ids if upload_id]
+    if not record_ids:
+        return 0
+
+    response = pinecone_index.fetch(ids=record_ids, namespace=target_namespace)
+    payload = _to_dict(response)
+    records = payload.get("records") or payload.get("vectors") or {}
+
+    total = 0
+    if isinstance(records, dict):
+        for record in records.values():
+            metadata = _extract_metadata(record)
+            total += _coerce_int(
+                metadata.get("total_chunks") or metadata.get("totalChunks")
+            )
+
+    return total
 
 
 def upsert_records(records: list[dict], namespace: str | None = None) -> Any:

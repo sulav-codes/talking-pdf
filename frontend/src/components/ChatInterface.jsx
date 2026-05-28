@@ -33,7 +33,9 @@ function renderAssistantContent(content) {
 
     if (contextMatch) {
       const contextNumber = contextMatch[1];
-      const contextText = (tokens[i + 1] || "").trim();
+      const nextToken = tokens[i + 1] || "";
+      const isNextAlsoContext = /^\[Context\s+\d+\]$/.test(nextToken);
+      const contextText = isNextAlsoContext ? "" : nextToken.trim();
 
       nodes.push(
         <div
@@ -49,7 +51,9 @@ function renderAssistantContent(content) {
         </div>,
       );
 
-      i += 1;
+      if (!isNextAlsoContext) {
+        i += 1;
+      }
       continue;
     }
 
@@ -97,7 +101,7 @@ export default function ChatInterface({ disabled, documentName, uploadId }) {
     }
 
     setQuestion("");
-  }, [uploadId]);
+  }, [storageKey, uploadId]);
 
   useEffect(() => {
     if (!storageKey) {

@@ -131,9 +131,16 @@ class APIService {
   /**
    * Get collection statistics
    */
-  static async getStats() {
+  static async getStats(uploadIds = []) {
     try {
-      const response = await fetch(`${API_BASE_URL}/stats`);
+      const params = new URLSearchParams();
+      if (Array.isArray(uploadIds) && uploadIds.length > 0) {
+        params.set("upload_ids", uploadIds.join(","));
+      }
+      const url = params.toString()
+        ? `${API_BASE_URL}/stats?${params.toString()}`
+        : `${API_BASE_URL}/stats`;
+      const response = await fetch(url);
       return await this.handleResponse(response);
     } catch (error) {
       this.handleNetworkError(error);
